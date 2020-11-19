@@ -1,0 +1,9 @@
+#!/bin/sh
+
+if nmcli radio wifi | grep -q disabled; then
+	nmcli radio wifi on
+	notify-send -a "WiFi Toggle Listener" "WiFi Enabled"
+else
+	nmcli radio wifi off
+	notify-send -a "WiFi Toggle Listener" "WiFi Disabled"
+fi

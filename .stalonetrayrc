@@ -1,0 +1,33 @@
+# vim:filetype=config:tw=80:et
+#
+# This is sample ~/.stalonetrayrc, resembling default configuration.
+# Remember: command line parameters take precedence.
+#
+# Directives introduced in 0.8 are marked with "NEW in 0.8"
+#
+####################################################################
+#
+# stalonetray understands following directives
+#
+####################################################################
+
+decorations none
+dockapp_mode simple
+fuzzy_edges 0
+geometry 2x1+0+0
+icon_size 24
+max_geometry 2x1
+no_shrink false
+parent_bg false
+scrollbars horizontal
+skip_taskbar true
+sticky true
+tint_color "#303030"
+background "#303030"
+tint_level 0
+transparent false
+window_layer top
+window_strut auto
+window_type dock
+xsync false
+

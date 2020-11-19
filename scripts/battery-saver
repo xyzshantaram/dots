@@ -1,0 +1,35 @@
+#!/bin/bash
+
+lower_limit='800M'
+
+perf1_upper_limit='3G'
+perf1_brightness='20'
+perf1_governor='schedutil'
+
+perf2_upper_limit='2G'
+perf2_brightness='10'
+perf2_governor='schedutil'
+
+read_upper_limit='2G'
+read_brightness='5'
+read_governor='powersave'
+
+profile="$(echo -e "Performance 1 (${lower_limit}Hz-${perf1_upper_limit}Hz)\nPerformance 2 (${lower_limit}Hz-${perf2_upper_limit}Hz)\nReading mode" | dmenu | sed -e 's/([^()]*)//g' | xargs)"
+
+echo $profile
+
+if [[ $profile == "Performance 1" ]]; then
+    pkexec cpupower frequency-set -d $lower_limit -u $perf1_upper_limit -g $perf1_governor
+    xbacklight -set $perf1_brightness
+    notify-send -a "Power Settings" "Performance Profile 1 applied." "Clock speed range set between "$lower_limit"Hz and "$perf1_upper_limit"Hz. CPU governor set to "$perf1_governor.""
+elif [[ $profile == "Performance 2" ]]; then
+    # set profile Performance 2
+    pkexec cpupower frequency-set -d $lower_limit -u $perf2_upper_limit -g $perf2_governor
+    xbacklight -set $perf2_brightness
+    notify-send -a "Power Settings" "Performance Profile 2 applied." "Clock speed range set between "$lower_limit"Hz and "$perf2_upper_limit"Hz. CPU governor set to "$perf2_governor"."
+else
+    # Reading mode
+    pkexec cpupower frequency-set -d $lower_limit -u $read_upper_limit -g $read_governor
+    xbacklight -set $read_brightness
+    notify-send -a "Power Settings" "Reading mode activated." "Clock speed range set between "$lower_limit"Hz and "$read_upper_limit"Hz. CPU governor set to "$read_governor"."
+fi
