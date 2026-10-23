@@ -68,10 +68,15 @@ Singleton {
     readonly property int fontSizeLarge: 14
 
     // --- sizing -----------------------------------------------------------
-    // Bar icons: the application icon and the nerd-font glyphs, sized against
-    // the pill rather than against the text. At the text's size they read as
+    // Bar icons: the application icon and the nerd-font glyphs. Sized against
+    // the pill rather than against the text — at the text's size they read as
     // specks next to a 14px clock.
     readonly property int iconSize: 18
+
+    // Nerd-font glyphs get their own, larger token. Their ink only fills part
+    // of the em box, so a glyph set to iconSize draws visibly smaller than an
+    // image set to it. This is the same apparent size, not a bigger one.
+    readonly property int glyphSize: 22
 
     // --- geometry ---------------------------------------------------------
     // Gaps are 8 in niri's layout; the bar uses the same number so its margin

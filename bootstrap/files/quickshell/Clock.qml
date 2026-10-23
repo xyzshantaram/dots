@@ -14,7 +14,7 @@ Pill {
 
         Text {
             text: Qt.formatDateTime(ticker.now, "HH:mm")
-            color: Theme.text
+            color: Situation.clockColour(ticker.now)
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeLarge
             font.bold: true
@@ -26,7 +26,7 @@ Pill {
             // Grey: it is the part that changes every second, and the eye
             // should not be pulled to it.
             text: `:${Qt.formatDateTime(ticker.now, "ss")}`
-            color: Theme.textMuted
+            color: Situation.clockColour(ticker.now)
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeLarge
         }
@@ -39,7 +39,7 @@ Pill {
 
         Text {
             text: Qt.formatDateTime(ticker.now, "ddd")
-            color: Theme.text
+            color: Situation.clockColour(ticker.now)
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize
             font.bold: true
@@ -56,7 +56,7 @@ Pill {
 
         Text {
             text: Qt.formatDateTime(ticker.now, "MM-dd")
-            color: Theme.text
+            color: Situation.clockColour(ticker.now)
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize
             font.bold: true

@@ -22,7 +22,7 @@ Pill {
         text: "\uf130"   // nf-fa-microphone
         color: Theme.alert
         font.family: Theme.iconFont
-        font.pixelSize: Theme.iconSize
+        font.pixelSize: Theme.glyphSize
     }
 
     // The dot breathes rather than blinks: a hard on/off reads as an error
@@ -31,9 +31,9 @@ Pill {
     Rectangle {
         visible: Voxtype.recording
         Layout.alignment: Qt.AlignVCenter
-        width: 8
-        height: 8
-        radius: 4
+        width: 10
+        height: 10
+        radius: 5
         color: Theme.recording
 
         SequentialAnimation on opacity {
@@ -49,7 +49,7 @@ Pill {
         text: "\uf110"   // nf-fa-spinner
         color: Theme.text
         font.family: Theme.iconFont
-        font.pixelSize: Theme.iconSize
+        font.pixelSize: Theme.glyphSize
         // Centred on itself, or the glyph orbits the corner of its box.
         transformOrigin: Item.Center
 

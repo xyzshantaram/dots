@@ -1,6 +1,7 @@
 pragma Singleton
 
 import Quickshell
+import Quickshell.Io
 import QtQuick
 
 // One question, asked everywhere: does this need attention?
@@ -14,6 +15,9 @@ import QtQuick
 // between the two ends would cut the corner through a muddy brown the moment
 // either end moved, and the forward walk is the shorter arc here anyway.
 Singleton {
+    // Named, because the evening-clock block below references its own
+    // properties and its file watcher by it.
+    id: root
     readonly property color calm:  Theme.calm
     readonly property color alert: Theme.alert
 
@@ -68,5 +72,75 @@ Singleton {
     /** Load, for anything measured in percent where high is the bad end. */
     function loadScore(percent, warn = 70, critical = 90): real {
         return ramp(percent, warn, critical)
+    }
+
+    // --- the evening clock -------------------------------------------------
+
+    /**
+     * Where the clock's warmth counts from: 19:00 today, or yesterday's if it
+     * is already past midnight.
+     *
+     * Without that second case, opening the shell at 01:00 would put the base
+     * six hours in the future, the score at zero, and the clock back to white —
+     * a jump backwards rather than a ramp.
+     */
+    property date clockBase: defaultClockBase()
+
+    function defaultClockBase(): date {
+        const d = new Date()
+        d.setHours(19, 0, 0, 0)
+        if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1)
+        return d
+    }
+
+    /** Hours from the base to full warmth. */
+    readonly property int clockRampHours: 6
+
+    /** 0 at the base, 1 six hours later, and flat either side. */
+    function clockTint(now): real {
+        const from = clockBase.getTime()
+        return ramp(now.getTime(), from, from + clockRampHours * 3600 * 1000)
+    }
+
+    /**
+     * White by day, walking to the alert orange across the evening.
+     *
+     * Deliberately not blend(): that ramp means "needs attention" and runs
+     * from purple, and the time of day should not be mistakable for a
+     * notification.
+     */
+    function clockColour(now): color {
+        const t = clockTint(now)
+        const a = Theme.text
+        const b = Theme.alert
+        return Qt.rgba(
+            a.r + (b.r - a.r) * t,
+            a.g + (b.g - a.g) * t,
+            a.b + (b.b - a.b) * t,
+            1)
+    }
+
+    /** Start the evening again from now. */
+    function resetClockTint(): void {
+        clockBase = new Date()
+    }
+
+    /**
+     * `bun reset-clock-tint` touches this file, and that is the whole protocol:
+     * a running shell sees the change and restarts the ramp. A watched file
+     * rather than Quickshell's IPC because it needs nothing registered with
+     * anything, which also means the command is harmless when no shell is up.
+     *
+     * The initial load is deliberately unhandled. A file left over from an
+     * earlier reset should not decide what this session starts at — only a
+     * *change* to it means anything.
+     */
+    readonly property string clockResetFile:
+        `${Quickshell.env("HOME")}/.cache/dots/clock-tint-reset`
+
+    FileView {
+        path: root.clockResetFile
+        watchChanges: true
+        onFileChanged: root.resetClockTint()
     }
 }

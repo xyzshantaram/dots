@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "ladder": "bun ./run.ts",
-    "verify": "sudo bash ./bootstrap/verify.sh"
+    "verify": "sudo bash ./bootstrap/verify.sh",
+    "reset-clock-tint": "mkdir -p ~/.cache/dots && touch ~/.cache/dots/clock-tint-reset"
   }
 }
