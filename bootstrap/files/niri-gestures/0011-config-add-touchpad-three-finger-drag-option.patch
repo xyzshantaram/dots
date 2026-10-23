@@ -1,0 +1,286 @@
+From 464f45a92c6fc3fb98b59064538ba364352ba4d9 Mon Sep 17 00:00:00 2001
+From: julian_lenovo_new <julian@jc84.com>
+Date: Sat, 10 Oct 2026 06:48:33 +0800
+Subject: [PATCH 11/11] config: add touchpad three-finger-drag option
+
+Expose libinput's native 3-finger drag (`@since 1.27`) as an
+`input { touchpad { three-finger-drag [fingers=3|4] } }` knob. Holding
+N fingers emulates a held left button so moving them drags without a
+physical press or tap-and-drag.
+
+The symbol is resolved via dlsym at runtime rather than enabling the
+`input` crate's `libinput_1_28` feature, because Ubuntu 24.04 (CI) ships
+libinput 1.25. Older libinput logs a warning and ignores the setting.
+
+Pairs with the configurable TouchpadSwipe finger counts: users can move
+the default 3-finger workspace/column swipes to fingers=4 and free three
+fingers for dragging (niri-wm/niri#2786).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ docs/wiki/Configuration:-Input.md |  4 ++
+ docs/wiki/Gestures.md             |  2 +
+ niri-config/src/input.rs          | 93 +++++++++++++++++++++++++++++++
+ niri-config/src/lib.rs            |  8 +++
+ resources/default-config.kdl      |  1 +
+ src/input/mod.rs                  | 50 +++++++++++++++++
+ 6 files changed, 158 insertions(+)
+
+diff --git a/docs/wiki/Configuration:-Input.md b/docs/wiki/Configuration:-Input.md
+index 31dc16c..1549420 100644
+--- a/docs/wiki/Configuration:-Input.md
++++ b/docs/wiki/Configuration:-Input.md
+@@ -273,6 +273,10 @@ Settings specific to `touchpad`s:
+ - `dwtp`: disable-when-trackpointing.
+ - `drag`: <sup>Since: 25.05</sup> can be `true` or `false`, controls if tap-and-drag is enabled.
+ - `drag-lock`: <sup>Since: 25.02</sup> if set, lifting the finger off for a short time while dragging will not drop the dragged item. See the [libinput documentation](https://wayland.freedesktop.org/libinput/doc/latest/tapping.html#tap-and-drag).
++- `three-finger-drag`: <sup>Since: next release</sup> enables libinput's [three-finger drag](https://wayland.freedesktop.org/libinput/doc/latest/drag-3fg.html): holding three fingers on the touchpad acts as a held left button, so moving them drags windows, text selections, or files without a physical press or tap-and-drag.
++  Use `three-finger-drag fingers=4` for four fingers instead (`fingers=` accepts `3` or `4`).
++  Requires libinput 1.27 or newer; older versions ignore the setting with a warning.
++  While enabled, libinput turns slow motion with that finger count into a drag, but a fast flick is still reported as a swipe gesture, so a `TouchpadSwipe` bind with the same `fingers=` value fires unpredictably. Move those binds to another finger count, for example rebind the default three-finger workspace and column swipes to `fingers=4`.
+ - `pinch-sensitivity`: <sup>Since: next release</sup> scales the sensitivity of pinch gestures sent to applications.
+   Values above `1.0` increase sensitivity, while values below `1.0` decrease it.
+ - `tap-button-map`: can be `left-right-middle` or `left-middle-right`, controls which button corresponds to a two-finger tap and a three-finger tap.
+diff --git a/docs/wiki/Gestures.md b/docs/wiki/Gestures.md
+index 7e98f73..1004031 100644
+--- a/docs/wiki/Gestures.md
++++ b/docs/wiki/Gestures.md
+@@ -69,6 +69,8 @@ binds {
+ 
+ `direction` names the physical direction your fingers travel, regardless of the touchpad's `natural-scroll` setting.
+ 
++Because the finger counts are configurable, you can free three fingers for libinput's [three-finger drag](https://wayland.freedesktop.org/libinput/doc/latest/drag-3fg.html) (macOS-style dragging without a physical press): enable `three-finger-drag` in the `input { touchpad { } }` block and move the workspace and column swipes to `fingers=4`. Do both together: a fast three-finger flick is still delivered as a swipe, so leaving `fingers=3` binds in place makes them fire only sometimes. See [Configuration: Input](./Configuration:-Input.md) for the setting.
++
+ For the overview actions, moving in the bind's direction performs the action and moving back reverses it: `open-overview` opens, `close-overview` closes, and `toggle-overview` does whichever applies when the gesture starts. This holds for every continuous gesture family, on the touchpad and the touchscreen, and a bind's `natural-scroll=true` property does not change it.
+ 
+ Tuning parameters for touchpad gesture recognition (`swipe-trigger-distance`, `pinch-trigger-scale`) live in the `input { touchpad { gestures { } } }` subblock — see [Configuration: Input](./Configuration:-Input.md#touchpad-gesture-tuning).
+diff --git a/niri-config/src/input.rs b/niri-config/src/input.rs
+index 6e5cb70..f4c2bbd 100644
+--- a/niri-config/src/input.rs
++++ b/niri-config/src/input.rs
+@@ -1,5 +1,8 @@
+ use std::str::FromStr;
+ 
++use knuffel::decode::{Context, Kind};
++use knuffel::errors::DecodeError;
++use knuffel::traits::ErrorSpan;
+ use miette::miette;
+ use smithay::input::keyboard::XkbConfig;
+ use smithay::reexports::input;
+@@ -198,6 +201,8 @@ pub struct Touchpad {
+     #[knuffel(child)]
+     pub drag_lock: bool,
+     #[knuffel(child)]
++    pub three_finger_drag: Option<ThreeFingerDrag>,
++    #[knuffel(child)]
+     pub natural_scroll: bool,
+     #[knuffel(child, unwrap(argument, str))]
+     pub click_method: Option<ClickMethod>,
+@@ -227,6 +232,64 @@ pub struct Touchpad {
+     pub gestures: Option<TouchpadGesturesConfig>,
+ }
+ 
++/// `three-finger-drag [fingers=3|4]`: libinput's native multi-finger drag.
++/// Holding N fingers on the pad emulates a held left button, so moving them
++/// drags without a physical press. Needs libinput >= 1.27 at runtime.
++#[derive(knuffel::Decode, Debug, Default, Clone, Copy, PartialEq, Eq)]
++pub struct ThreeFingerDrag {
++    #[knuffel(property, default)]
++    pub fingers: DragFingers,
++}
++
++/// Finger count for `three-finger-drag`. libinput supports exactly 3 or 4.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct DragFingers(pub u8);
++
++impl Default for DragFingers {
++    fn default() -> Self {
++        Self(3)
++    }
++}
++
++impl<S: ErrorSpan> knuffel::DecodeScalar<S> for DragFingers {
++    fn type_check(
++        type_name: &Option<knuffel::span::Spanned<knuffel::ast::TypeName, S>>,
++        ctx: &mut Context<S>,
++    ) {
++        if let Some(type_name) = &type_name {
++            ctx.emit_error(DecodeError::unexpected(
++                type_name,
++                "type name",
++                "no type name expected for this node",
++            ));
++        }
++    }
++
++    fn raw_decode(
++        value: &knuffel::span::Spanned<knuffel::ast::Literal, S>,
++        ctx: &mut Context<S>,
++    ) -> Result<Self, DecodeError<S>> {
++        match &**value {
++            knuffel::ast::Literal::Int(ref val) => match u8::try_from(val) {
++                Ok(n @ 3..=4) => Ok(Self(n)),
++                Ok(n) => {
++                    let msg = format!("fingers={n} out of range (valid range 3..=4)");
++                    ctx.emit_error(DecodeError::conversion(value, msg));
++                    Ok(Self::default())
++                }
++                Err(e) => {
++                    ctx.emit_error(DecodeError::conversion(value, e));
++                    Ok(Self::default())
++                }
++            },
++            _ => {
++                ctx.emit_error(DecodeError::scalar_kind(Kind::Int, value));
++                Ok(Self::default())
++            }
++        }
++    }
++}
++
+ impl Touchpad {
+     /// Swipe commit gate in libinput delta units (from
+     /// `swipe-trigger-distance`). Default 16.
+@@ -896,6 +959,36 @@ mod tests {
+         Input::from_part(&part)
+     }
+ 
++    fn parse_fails(text: &str) -> bool {
++        knuffel::parse::<InputPart>("test.kdl", text).is_err()
++    }
++
++    #[test]
++    fn parse_three_finger_drag() {
++        let parsed = do_parse("touchpad { three-finger-drag; }");
++        assert_eq!(
++            parsed.touchpad.three_finger_drag,
++            Some(ThreeFingerDrag {
++                fingers: DragFingers(3)
++            })
++        );
++
++        let parsed = do_parse("touchpad { three-finger-drag fingers=4; }");
++        assert_eq!(
++            parsed.touchpad.three_finger_drag,
++            Some(ThreeFingerDrag {
++                fingers: DragFingers(4)
++            })
++        );
++
++        let parsed = do_parse("touchpad { tap; }");
++        assert_eq!(parsed.touchpad.three_finger_drag, None);
++
++        assert!(parse_fails("touchpad { three-finger-drag fingers=2; }"));
++        assert!(parse_fails("touchpad { three-finger-drag fingers=5; }"));
++        assert!(parse_fails("touchpad { three-finger-drag fingers=\"4\"; }"));
++    }
++
+     #[test]
+     fn parse_scroll_factor_combined() {
+         // Test combined scroll-factor syntax
+diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
+index 4175a9d..f407a1b 100644
+--- a/niri-config/src/lib.rs
++++ b/niri-config/src/lib.rs
+@@ -718,6 +718,7 @@ mod tests {
+                     dwt
+                     dwtp
+                     drag true
++                    three-finger-drag fingers=4
+                     click-method "clickfinger"
+                     accel-speed 0.2
+                     accel-profile "flat"
+@@ -1045,6 +1046,13 @@ mod tests {
+                         true,
+                     ),
+                     drag_lock: false,
++                    three_finger_drag: Some(
++                        ThreeFingerDrag {
++                            fingers: DragFingers(
++                                4,
++                            ),
++                        },
++                    ),
+                     natural_scroll: false,
+                     click_method: Some(
+                         Clickfinger,
+diff --git a/resources/default-config.kdl b/resources/default-config.kdl
+index 9e83815..39b4975 100644
+--- a/resources/default-config.kdl
++++ b/resources/default-config.kdl
+@@ -35,6 +35,7 @@ input {
+         // dwtp
+         // drag false
+         // drag-lock
++        // three-finger-drag
+         natural-scroll
+         // accel-speed 0.2
+         // accel-profile "flat"
+diff --git a/src/input/mod.rs b/src/input/mod.rs
+index db7ac19..9770da6 100644
+--- a/src/input/mod.rs
++++ b/src/input/mod.rs
+@@ -4972,6 +4972,55 @@ fn hardcoded_overview_bind(raw: Keysym, mods: ModifiersState) -> Option<Bind> {
+     })
+ }
+ 
++// libinput's 3-finger-drag API is `@since 1.27`, but Ubuntu 24.04 (CI) ships 1.25, so the `input`
++// crate's `libinput_1_28` feature can't be enabled. Resolve the symbol at runtime instead, the same
++// way main.rs handles `wl_display_set_default_max_buffer_size`. `None` disables the drag.
++fn set_3fg_drag(device: &input::Device, fingers: Option<u8>) {
++    use std::ffi::{c_int, c_void};
++
++    use input::AsRaw;
++
++    // Values of `enum libinput_config_3fg_drag_state`: DISABLED, ENABLED_3FG, ENABLED_4FG.
++    let state: c_int = match fingers {
++        None => 0,
++        Some(3) => 1,
++        Some(_) => 2,
++    };
++
++    unsafe {
++        // RTLD_NOLOAD: only get a handle to the libinput already loaded by the input crate.
++        let lib = libc::dlopen(
++            c"libinput.so.10".as_ptr(),
++            libc::RTLD_LAZY | libc::RTLD_NOLOAD,
++        );
++        if lib.is_null() {
++            warn!("cannot configure three-finger-drag: libinput.so.10 is not loaded");
++            return;
++        }
++
++        let sym = libc::dlsym(lib, c"libinput_device_config_3fg_drag_set_enabled".as_ptr());
++        if sym.is_null() {
++            // Expected on libinput < 1.27; only worth a warning if the user asked for it.
++            if fingers.is_some() {
++                warn!("three-finger-drag requires libinput >= 1.27; ignoring");
++            }
++        } else {
++            let func: unsafe extern "C" fn(*mut c_void, c_int) -> c_int = std::mem::transmute(sym);
++            // Like the other libinput knobs, don't fail on UNSUPPORTED / INVALID from the device;
++            // just make it visible in the journal (0 = LIBINPUT_CONFIG_STATUS_SUCCESS).
++            let status = func(device.as_raw_mut().cast(), state);
++            if status != 0 {
++                debug!(
++                    "three-finger-drag not applied to {:?}: libinput status {status}",
++                    device.name()
++                );
++            }
++        }
++
++        libc::dlclose(lib);
++    }
++}
++
+ pub fn apply_libinput_settings(config: &niri_config::Input, device: &mut input::Device) {
+     // According to Mutter code, this setting is specific to touchpads.
+     let is_touchpad = device.config_tap_finger_count() > 0;
+@@ -4992,6 +5041,7 @@ pub fn apply_libinput_settings(config: &niri_config::Input, device: &mut input::
+         } else {
+             input::DragLockState::Disabled
+         });
++        set_3fg_drag(device, c.three_finger_drag.map(|d| d.fingers.0));
+         let _ = device.config_scroll_set_natural_scroll_enabled(c.natural_scroll);
+         let _ = device.config_accel_set_speed(c.accel_speed.0);
+         let _ = device.config_left_handed_set(c.left_handed);

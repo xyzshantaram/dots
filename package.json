@@ -3,6 +3,6 @@
   "private": true,
   "scripts": {
     "ladder": "bun ./run.ts",
-    "verify": "sudo bash ./sensible-bootstrap/verify.sh"
+    "verify": "sudo bash ./bootstrap/verify.sh"
   }
 }

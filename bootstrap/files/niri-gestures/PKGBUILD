@@ -1,0 +1,127 @@
+# niri with the configurable touch-gesture patch set (niri-wm/niri#3771).
+#
+# Upstream hardcodes the touchpad gesture finger counts, so the layout this
+# repo wants — three fingers for the overview, four to navigate — is not
+# reachable from config.kdl. The series in this directory turns the gestures
+# into ordinary binds (`TouchpadSwipe fingers=3 direction="up" { ... }`), which
+# is what the TouchpadSwipe lines in files/niri/config.kdl use.
+#
+# The upstream commit is PINNED, not `main`: the series was rebased onto this
+# exact commit, so it is the only one it is known to apply to. Bumping it means
+# regenerating every patch. See 105-niri-gestures.ts for how it is built.
+#
+# Exit plan: when #3771 (or an equivalent) lands upstream, delete this package,
+# files/niri-gestures/ and 105-niri-gestures.ts, drop the TouchpadSwipe binds,
+# and go back to the `niri` package.
+#
+# provides/conflicts is what lets `pacman -U` replace the repo's niri. The
+# provided version is set equal to pkgver, so an ordinary `pacman -Syu` does not
+# treat it as something to replace. When the repo's niri moves past 26.04,
+# pacman will offer to swap this package back out — that is the intended exit.
+
+pkgname=niri-gestures
+pkgver=26.04
+pkgrel=1
+pkgdesc="A scrollable-tiling Wayland compositor, with the configurable touch-gesture patch set"
+arch=('x86_64')
+url="https://github.com/niri-wm/niri"
+license=('GPL-3.0-or-later')
+depends=('cairo' 'glib2' 'glibc' 'libdisplay-info' 'libgcc' 'libinput'
+         'libpipewire' 'libxkbcommon' 'mesa' 'pango' 'pixman' 'seatd'
+         'systemd-libs' 'xdg-desktop-portal-impl')
+makedepends=('clang' 'git')
+provides=('niri' "niri=$pkgver" 'wayland-compositor')
+conflicts=('niri')
+
+# !lto is load-bearing, not a preference.
+#
+# makepkg's `lto` option puts -flto=auto into CFLAGS, so libspa's C shim
+# (libspa-rs-reexports.a, built from static_fns.c and friends) is compiled to
+# GCC LTO bytecode — the objects are full of .gnu.lto_* sections. rustup's rustc
+# links with rust-lld, which understands LLVM bitcode but not GCC's bytecode, so
+# it cannot pull anything out of that archive and the link dies with:
+#
+#   undefined symbol: libspa_rs_type_video_format
+#   undefined symbol: spa_format_parse_libspa_rs
+#   ...
+#
+# Without -flto those files are ordinary ELF objects and link normally. This was
+# a real failure, not a theory: see the note in 105-niri-gestures.ts.
+options=('!lto')
+
+# The commit the series was rebased onto (the parent of its first commit).
+_base=2c82b77a7116a1241ea2fd41dd008ff00b609aae
+
+source=("niri-$_base.tar.gz::https://github.com/niri-wm/niri/archive/$_base.tar.gz"
+        0001-feat-configurable-touch-gestures.patch
+        0002-feat-deferred-tap-to-focus-via-focus-on-touch.patch
+        0003-feat-flick-to-throw-fling-a-touch-dragged-window-to-.patch
+        0004-feat-richer-touch-gesture-debug-telemetry.patch
+        0005-fix-cancel-client-touches-when-a-gesture-claims-the-.patch
+        0006-fix-touchpad-swipe-bind-directions-follow-physical-f.patch
+        0007-fix-overview-gesture-binds-perform-the-bound-action.patch
+        0008-fix-second-finger-tap-toggles-floating-during-a-touc.patch
+        0009-fix-cancelled-overview-touch-no-longer-counts-as-a-t.patch
+        0010-docs-correct-the-touchpad-swipe-trigger-distance-uni.patch
+        0011-config-add-touchpad-three-finger-drag-option.patch)
+
+# The tarball is a moving GitHub archive of one commit, so there is nothing
+# stable to hash without downloading it; the patches are hashed.
+sha256sums=('SKIP'
+        'a90cf2c6630bf18cd4581ddc0200496cad3170920d745b1f3618b886999fd7f6'
+        '7b641bf122acc558a698386a8a503d31063f4e9f95c5370ef11c11a40dca828d'
+        '93cdd743754d8727de8fdb83880a1bc8852eca8f2d3be71204562603831a1ede'
+        '74170ec3a5fa46c4e09cb54faceac59335f82bc59e068031d732899e0cb4bd5e'
+        'c91e0b067aa0eef38c7d2d8a7dd048f1ccaaa347f5454d96c254396d3f658e55'
+        '852b9be4422120d22b1edc1473eefb494a98b0b5ddb2803674dff36b1aaddbfe'
+        '5949e628c97f0d7e568fe29b5aaf2a2a0fa15e856ce318b17b645831abafc139'
+        '940169e066182fd09638a7e8355706b42723ffab294d801860a0b417c46dba2d'
+        '409c7c39459af580aa1195a69dc573ffc876413ef34dcecf1c1a368c86b2199b'
+        '61911d4165fbc0d820c6a43ccc7bd7a67c7351a326af94a887ec50262cc3fa57'
+        'e42aceabf40c9ea449087fe119eb09725c23e641c6e65d18a02140e8d9169e97')
+
+prepare() {
+    cd "niri-$_base"
+
+    # In numeric order; the series was generated against this exact commit, so a
+    # failure here means the pinned base and the patches have drifted apart.
+    local p
+    for p in "${srcdir}"/000*.patch; do
+        patch -Np1 --no-backup-if-mismatch -i "$p"
+    done
+}
+
+build() {
+    cd "niri-$_base"
+    # cargo comes from rustup, installed for the account rather than as a
+    # package, so it cannot be named in makedepends and makepkg will not put it
+    # on PATH. lib.ts's ensureRustup() is what guarantees it exists.
+    export PATH="$HOME/.cargo/bin:$PATH"
+    # --locked keeps the committed Cargo.lock; the patches add no dependencies.
+    # Network is still needed for the smithay git dependency, so this is not
+    # --frozen (which would also mean --offline).
+    cargo build --release --locked
+}
+
+package() {
+    cd "niri-$_base"
+
+    install -Dm755 target/release/niri           "$pkgdir/usr/bin/niri"
+    install -Dm755 resources/niri-session        "$pkgdir/usr/bin/niri-session"
+
+    install -Dm644 resources/niri.service          "$pkgdir/usr/lib/systemd/user/niri.service"
+    install -Dm644 resources/niri-shutdown.target  "$pkgdir/usr/lib/systemd/user/niri-shutdown.target"
+
+    install -Dm644 resources/niri.desktop          "$pkgdir/usr/share/wayland-sessions/niri.desktop"
+    install -Dm644 resources/niri-portals.conf     "$pkgdir/usr/share/xdg-desktop-portal/niri-portals.conf"
+
+    install -Dm644 README.md                       "$pkgdir/usr/share/doc/niri/README.md"
+    install -Dm644 resources/default-config.kdl    "$pkgdir/usr/share/doc/niri/default-config.kdl"
+
+    install -d "$pkgdir/usr/share/bash-completion/completions" \
+               "$pkgdir/usr/share/fish/vendor_completions.d" \
+               "$pkgdir/usr/share/zsh/site-functions"
+    target/release/niri completions bash > "$pkgdir/usr/share/bash-completion/completions/niri"
+    target/release/niri completions fish > "$pkgdir/usr/share/fish/vendor_completions.d/niri.fish"
+    target/release/niri completions zsh  > "$pkgdir/usr/share/zsh/site-functions/_niri"
+}

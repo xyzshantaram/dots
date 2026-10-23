@@ -1,0 +1,333 @@
+From 0bbbca85bc62bc9934bfe7bcf5c4d9eb48765bca Mon Sep 17 00:00:00 2001
+From: julian <julian@jc84.com>
+Date: Sat, 13 Jun 2026 17:45:03 +0800
+Subject: [PATCH 03/11] =?UTF-8?q?feat:=20flick-to-throw=20=E2=80=94=20flin?=
+ =?UTF-8?q?g=20a=20touch-dragged=20window=20to=20the=20adjacent=20display?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Releasing a single-finger window move with enough velocity throws the
+window to the neighbouring output in the flick direction. Touch-only:
+mouse moves are unaffected (they already relocate across the bezel when
+the cursor crosses). Works for both Mod+touch and titlebar/xdg_toplevel
+moves, which share MoveGrab's single touch-up handler.
+
+- niri-config: flick-to-monitor (default on) + flick-velocity-threshold
+  (default 800 px/s) knobs under touchscreen { gestures { } }, with
+  accessors and parse tests.
+- move_grab: per-axis SwipeTracker fed from touch motion; on release,
+  retarget the in-flight interactive move to the adjacent output's centre
+  (output_{left,right,up,down}_of) so interactive_move_end drops it there.
+- docs: "Flick to Throw" section in Gestures.md plus the two knobs in
+  Configuration:-Input.md and resources/default-config.kdl (and fills the
+  swipe-multi-finger-scale gap in Gestures.md).
+
+Fires only in the Move gesture state: floating windows throw in all four
+directions; a tiled window throws once it has been picked up into a move
+(a purely sideways drag on a tiled window stays column navigation — the
+view-offset state — and is left untouched).
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+---
+ docs/wiki/Configuration:-Input.md |  5 ++
+ docs/wiki/Gestures.md             | 19 +++++++
+ niri-config/src/input.rs          | 33 ++++++++++++
+ niri-config/src/lib.rs            | 26 +++++++++
+ resources/default-config.kdl      |  7 +++
+ src/input/move_grab.rs            | 88 +++++++++++++++++++++++++++++++
+ 6 files changed, 178 insertions(+)
+
+diff --git a/docs/wiki/Configuration:-Input.md b/docs/wiki/Configuration:-Input.md
+index 2d8577b..832f828 100644
+--- a/docs/wiki/Configuration:-Input.md
++++ b/docs/wiki/Configuration:-Input.md
+@@ -325,6 +325,11 @@ All knobs are grouped as: **trigger** (classifier commit gates), **dominance** (
+ 
+ - `edge-start-distance <float>`: width in pixels of the screen-edge start zone. A touch must *begin* within this distance from an edge to count as a `TouchEdge` gesture; touches starting farther in are treated as regular swipes. Default: `30.0`.
+ 
++**Flick to throw:**
++
++- `flick-to-monitor <bool>`: <sup>Since: next</sup> when enabled, releasing a single-finger window move with enough velocity throws the window to the adjacent display in the flick direction. Touch only — mouse moves already relocate across the bezel when the cursor crosses. Default: `true`. See [Flick to Throw](./Gestures.md#flick-to-throw) for the floating-vs-tiled behaviour.
++- `flick-velocity-threshold <float>`: minimum release speed in logical pixels per second for a move-release to count as a throw rather than a normal positional drop. Raise it to require a more deliberate fling; lower it for a hair trigger. Default: `800.0`.
++
+ Example:
+ 
+ ```kdl
+diff --git a/docs/wiki/Gestures.md b/docs/wiki/Gestures.md
+index c28c124..2bcb036 100644
+--- a/docs/wiki/Gestures.md
++++ b/docs/wiki/Gestures.md
+@@ -174,6 +174,8 @@ binds {
+ - `fingers=` — integer in `3..=10`. Rejecting `<3` preserves the 2-finger passthrough contract used by clients for scrolling/zooming. Required.
+ - `direction=` — one of `"up"`, `"down"`, `"left"`, `"right"`. Required.
+ 
++Swipe recognition is tuned in `input { touchscreen { gestures { } } }` by `swipe-trigger-distance` (px of centroid motion before a swipe commits, default 100) and `swipe-multi-finger-scale` (ramps that distance for 4+ finger swipes, default 1.2; set 1.0 to disable the bias).
++
+ #### Pinch Gestures
+ 
+ ```kdl
+@@ -356,6 +358,23 @@ You can customize the look of the window insertion preview in the [`insert-hint`
+ 
+ <sup>Since: 25.11</sup> Tap with a second finger while moving to toggle between floating and tiling layout to put the window into.
+ 
++#### Flick to Throw
++
++<sup>Since: next release</sup>
++
++On a multi-display setup, releasing a one-finger window move with enough velocity **throws** the window to the neighbouring display in the flick direction. This is the touch counterpart to dragging a window across the bezel with the mouse: the cursor can physically cross the boundary, but your finger can't leave the glass, so a quick flick stands in for that crossing.
++
++It is **touch only** — mouse drag-releases are unaffected — and works for any single-finger move, whether started with <kbd>Mod</kbd> + touch or by dragging a window's titlebar (client `xdg_toplevel.move`); both run through the same interactive-move handler. A second finger still ends the move early, as before, so the flick is single-finger only.
++
++- **Floating windows** throw in all four directions.
++- **Tiled windows** throw once they have been picked up into a move: lead with an up/down motion to detach the window from its column, then fling it in any direction. A *purely sideways* drag on a tiled window stays column navigation (horizontal view scroll) and is never a throw.
++- If there is no display in the flicked direction, the window simply drops in place — it is never thrown off the edge.
++
++This is a built-in interactive-move behaviour, not a `binds {}` trigger. Two knobs in `input { touchscreen { gestures { } } }` control it (see [Configuration: Input](./Configuration:-Input.md#touchscreen)):
++
++- `flick-to-monitor` — enable or disable the throw. Default: on.
++- `flick-velocity-threshold` — minimum release speed in logical px/s to count as a throw rather than a normal drop. Raise it to require a more deliberate fling; lower it for a hair trigger. Default: `800.0`.
++
+ ### Tablet
+ 
+ #### Interactive Move
+diff --git a/niri-config/src/input.rs b/niri-config/src/input.rs
+index 1673ad7..a35ff23 100644
+--- a/niri-config/src/input.rs
++++ b/niri-config/src/input.rs
+@@ -534,6 +534,25 @@ impl Touchscreen {
+             .and_then(|g| g.tap_hold_trigger_delay_ms)
+             .unwrap_or(200.0)
+     }
++
++    /// Whether flick-to-throw is enabled. Default on; an explicit
++    /// `flick-to-monitor false` in the gestures block disables it.
++    pub fn flick_to_monitor(&self) -> bool {
++        self.gestures
++            .as_ref()
++            .and_then(|g| g.flick_to_monitor)
++            .unwrap_or(true)
++    }
++
++    /// Minimum release speed (logical px/s) for a single-finger
++    /// move-release to throw the window to the adjacent display. Default
++    /// 800.
++    pub fn flick_velocity_threshold(&self) -> f64 {
++        self.gestures
++            .as_ref()
++            .and_then(|g| g.flick_velocity_threshold)
++            .unwrap_or(800.0)
++    }
+ }
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+@@ -665,6 +684,20 @@ pub struct TouchscreenGesturesConfig {
+     /// hold-drag. Default: 200.
+     #[knuffel(child, unwrap(argument))]
+     pub tap_hold_trigger_delay_ms: Option<f64>,
++    /// Flick-to-throw toggle. When enabled, releasing a single-finger
++    /// window move (`Mod+touch` drag, or dragging a window by its
++    /// titlebar) with a release speed above `flick_velocity_threshold`
++    /// throws the window to the adjacent display in the flick direction
++    /// instead of dropping it in place. Touch only — mouse moves are
++    /// unaffected. Default: enabled. Set `flick-to-monitor false` to
++    /// disable.
++    #[knuffel(child, unwrap(argument))]
++    pub flick_to_monitor: Option<bool>,
++    /// Minimum release speed (in logical pixels per second) for a
++    /// single-finger move-release to count as a flick/throw rather than a
++    /// normal positional drop. Default: 800.0.
++    #[knuffel(child, unwrap(argument))]
++    pub flick_velocity_threshold: Option<f64>,
+ }
+ 
+ /// Tuning parameters for touchpad gesture recognition.
+diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
+index 74be7ee..4175a9d 100644
+--- a/niri-config/src/lib.rs
++++ b/niri-config/src/lib.rs
+@@ -641,6 +641,32 @@ mod tests {
+         assert_eq!(config.input.keyboard.repeat_rate, 25);
+     }
+ 
++    #[test]
++    fn touchscreen_flick_defaults() {
++        let config = Config::parse_mem("").unwrap();
++        assert!(config.input.touchscreen.flick_to_monitor());
++        assert_eq!(config.input.touchscreen.flick_velocity_threshold(), 800.0);
++    }
++
++    #[test]
++    fn touchscreen_flick_overrides() {
++        let config = Config::parse_mem(
++            r##"
++            input {
++                touchscreen {
++                    gestures {
++                        flick-to-monitor false
++                        flick-velocity-threshold 1200.0
++                    }
++                }
++            }
++            "##,
++        )
++        .unwrap();
++        assert!(!config.input.touchscreen.flick_to_monitor());
++        assert_eq!(config.input.touchscreen.flick_velocity_threshold(), 1200.0);
++    }
++
+     #[track_caller]
+     fn do_parse(text: &str) -> Config {
+         Config::parse_mem(text)
+diff --git a/resources/default-config.kdl b/resources/default-config.kdl
+index eb3f771..9e83815 100644
+--- a/resources/default-config.kdl
++++ b/resources/default-config.kdl
+@@ -120,6 +120,13 @@ input {
+     //     //     // Rotation — angles in DEGREES.
+     //     //     rotation-trigger-angle 20.0    // ° before rotation can latch
+     //     //     rotation-dominance-ratio 0.5   // arc must beat swipe × this (higher = stricter)
++    //     //
++    //     //     // Flick-to-throw: release a one-finger window move with
++    //     //     // velocity to throw the window to the adjacent display.
++    //     //     // Touch only; on by default. Floating windows throw any
++    //     //     // direction, tiled windows throw once picked up into a move.
++    //     //     flick-to-monitor true
++    //     //     flick-velocity-threshold 800.0 // min release px/s to count as a throw
+     //     // }
+     // }
+ 
+diff --git a/src/input/move_grab.rs b/src/input/move_grab.rs
+index 4880298..96a90fe 100644
+--- a/src/input/move_grab.rs
++++ b/src/input/move_grab.rs
+@@ -18,6 +18,7 @@ use smithay::input::{tablet, SeatHandler};
+ use smithay::output::Output;
+ use smithay::utils::{IsAlive, Logical, Point, SERIAL_COUNTER};
+ 
++use crate::input::swipe_tracker::SwipeTracker;
+ use crate::input::AnyStartData;
+ use crate::niri::State;
+ 
+@@ -35,6 +36,13 @@ pub struct MoveGrab {
+     new_location: Point<f64, Logical>,
+     event_timestamp: Option<Duration>,
+     relative_delta: Option<Point<f64, Logical>>,
++
++    // Per-axis release-velocity trackers for the flick-to-throw gesture.
++    // Fed only from touch motion (touch-only feature); `flick_last` holds
++    // the previous touch location so each motion contributes a delta.
++    flick_x: SwipeTracker,
++    flick_y: SwipeTracker,
++    flick_last: Option<Point<f64, Logical>>,
+ }
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+@@ -68,6 +76,9 @@ impl MoveGrab {
+             new_location: location,
+             event_timestamp: None,
+             relative_delta: None,
++            flick_x: SwipeTracker::new(),
++            flick_y: SwipeTracker::new(),
++            flick_last: None,
+         })
+     }
+ 
+@@ -293,6 +304,72 @@ impl MoveGrab {
+ 
+         true
+     }
++
++    /// On a fast single-finger release of an ongoing window move, retarget
++    /// the in-flight move to the adjacent display in the flick direction.
++    /// The `interactive_move_end` that runs right after (from `on_ungrab`)
++    /// then drops the window on that output with the normal animation.
++    ///
++    /// No-op (leaving the move to drop in place) when the feature is
++    /// disabled, the release is below the velocity threshold, the grab is
++    /// not in the `Move` state, or there is no display in that direction.
++    /// Touch only — fed exclusively from `TouchGrab::motion`.
++    fn try_flick_to_monitor(&mut self, data: &mut State) {
++        if self.gesture != GestureState::Move {
++            return;
++        }
++
++        let (enabled, threshold) = {
++            let config = data.niri.config.borrow();
++            let ts = &config.input.touchscreen;
++            (ts.flick_to_monitor(), ts.flick_velocity_threshold())
++        };
++        if !enabled {
++            return;
++        }
++
++        let vx = self.flick_x.velocity();
++        let vy = self.flick_y.velocity();
++        // Compare squared magnitude against squared threshold to skip the sqrt.
++        if vx * vx + vy * vy < threshold * threshold {
++            return;
++        }
++
++        let Some((current, _)) = data.niri.output_under(self.last_location) else {
++            return;
++        };
++        let current = current.clone();
++
++        // Dominant axis picks the throw direction; up is -y in screen space.
++        let target = if vx.abs() >= vy.abs() {
++            if vx < 0. {
++                data.niri.output_left_of(&current)
++            } else {
++                data.niri.output_right_of(&current)
++            }
++        } else if vy < 0. {
++            data.niri.output_up_of(&current)
++        } else {
++            data.niri.output_down_of(&current)
++        };
++        let Some(target) = target else {
++            return;
++        };
++
++        // Drop at the centre of the target output. interactive_move_update
++        // already knows how to relocate a moving window onto another output
++        // — it's the same path a mouse drag uses when it crosses the bezel.
++        let Some(geo) = data.niri.global_space.output_geometry(&target) else {
++            return;
++        };
++        let center = Point::from((geo.size.w as f64 / 2., geo.size.h as f64 / 2.));
++        data.niri.layout.interactive_move_update(
++            &self.window,
++            Point::from((0., 0.)),
++            target,
++            center,
++        );
++    }
+ }
+ 
+ impl PointerGrab<State> for MoveGrab {
+@@ -498,6 +575,9 @@ impl TouchGrab<State> for MoveGrab {
+         handle.up(data, event);
+ 
+         if event.slot == self.start_data.unwrap_touch().slot {
++            // A fast release throws the window to the adjacent display;
++            // must run before unset_grab, which ends the move in on_ungrab.
++            self.try_flick_to_monitor(data);
+             handle.unset_grab(self, data);
+         }
+     }
+@@ -517,6 +597,14 @@ impl TouchGrab<State> for MoveGrab {
+ 
+         self.new_location = event.location;
+         self.event_timestamp = Some(Duration::from_micros(event.time.micros()));
++
++        // Feed the release-velocity trackers (per axis) for flick-to-throw.
++        let ts = Duration::from_micros(event.time.micros());
++        if let Some(prev) = self.flick_last.replace(event.location) {
++            let delta = event.location - prev;
++            self.flick_x.push(delta.x, ts);
++            self.flick_y.push(delta.y, ts);
++        }
+     }
+ 
+     fn frame(&mut self, data: &mut State, handle: &mut TouchInnerHandle<'_, State>) {

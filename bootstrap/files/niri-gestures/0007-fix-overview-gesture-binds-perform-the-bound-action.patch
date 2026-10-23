@@ -1,0 +1,521 @@
+From 5c320ca1e697288dc6fc747ed4fa1921a4faefe4 Mon Sep 17 00:00:00 2001
+From: julian_lenovo_new <julian@jc84.com>
+Date: Mon, 5 Oct 2026 19:26:25 +0800
+Subject: [PATCH 07/11] fix: overview gesture binds perform the bound action
+
+Continuous overview gestures picked open vs. close from finger travel
+alone: up opened and down closed, `natural-scroll=true` flipped that,
+and the bound action and direction were ignored. So `open-overview` on
+a swipe down, or on a swipe up with `natural-scroll=true`, could never
+open the overview, and only vertical travel counted at all.
+
+Now continuing the gesture in the direction it locked in performs the
+bound action, and moving back reverses it: `open-overview` opens,
+`close-overview` closes, and `toggle-overview` does whichever applies
+when the gesture starts. This covers touchscreen swipes, pinches,
+rotations, edge swipes (inward from the edge) and tap-hold-drags, and
+touchpad swipes. `natural-scroll` no longer affects overview binds.
+
+With `toggle-overview` bound to both swipe up and swipe down, either
+direction now toggles; the docs examples use `open-overview` and
+`close-overview` to keep "up opens, down closes".
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ docs/wiki/Gestures.md      | 27 +++++------
+ src/input/mod.rs           | 60 ++++++++++++++++++++++---
+ src/input/touch_gesture.rs | 92 +++++++++++++++++++++++++++++++-------
+ src/niri.rs                | 18 ++++++++
+ 4 files changed, 162 insertions(+), 35 deletions(-)
+
+diff --git a/docs/wiki/Gestures.md b/docs/wiki/Gestures.md
+index 6b7c413..7e98f73 100644
+--- a/docs/wiki/Gestures.md
++++ b/docs/wiki/Gestures.md
+@@ -62,13 +62,15 @@ binds {
+     TouchpadSwipe fingers=3 direction="down"  { focus-workspace-down; }
+     TouchpadSwipe fingers=3 direction="left"  { focus-column-right; }
+     TouchpadSwipe fingers=3 direction="right" { focus-column-left; }
+-    TouchpadSwipe fingers=4 direction="up"    { toggle-overview; }
+-    TouchpadSwipe fingers=4 direction="down"  { toggle-overview; }
++    TouchpadSwipe fingers=4 direction="up"    { open-overview; }
++    TouchpadSwipe fingers=4 direction="down"  { close-overview; }
+ }
+ ```
+ 
+ `direction` names the physical direction your fingers travel, regardless of the touchpad's `natural-scroll` setting.
+ 
++For the overview actions, moving in the bind's direction performs the action and moving back reverses it: `open-overview` opens, `close-overview` closes, and `toggle-overview` does whichever applies when the gesture starts. This holds for every continuous gesture family, on the touchpad and the touchscreen, and a bind's `natural-scroll=true` property does not change it.
++
+ Tuning parameters for touchpad gesture recognition (`swipe-trigger-distance`, `pinch-trigger-scale`) live in the `input { touchpad { gestures { } } }` subblock — see [Configuration: Input](./Configuration:-Input.md#touchpad-gesture-tuning).
+ 
+ #### Workspace Switch
+@@ -167,8 +169,8 @@ binds {
+     TouchSwipe fingers=3 direction="down"  { focus-workspace-down; }
+     TouchSwipe fingers=3 direction="left"  { focus-column-right; }
+     TouchSwipe fingers=3 direction="right" { focus-column-left; }
+-    TouchSwipe fingers=4 direction="up"    { toggle-overview; }
+-    TouchSwipe fingers=4 direction="down"  { toggle-overview; }
++    TouchSwipe fingers=4 direction="up"    { open-overview; }
++    TouchSwipe fingers=4 direction="down"  { close-overview; }
+     // fingers=5 (and 6..=10) also work.
+ }
+ ```
+@@ -298,17 +300,16 @@ The edge trigger zone width is set by `edge-start-distance` in the `touchscreen
+ 
+ ##### Edge swipes with continuous actions (overview, workspace switch)
+ 
+-Edge swipes can be bound to continuous actions like `toggle-overview` or `focus-workspace-up`. Two things to be aware of:
+-
+-- **Direction inversion:** Edge swipes feeding into overview require `natural-scroll=true` to feel correct. Without it, swiping down from the top edge tries to close overview instead of opening it.
++Edge swipes can be bound to continuous actions like `toggle-overview` or `focus-workspace-up`.
+ 
+-  ```kdl
+-  binds {
+-      TouchEdge edge="top" zone="right" natural-scroll=true { toggle-overview; }
+-  }
+-  ```
++For the overview actions an edge swipe travels inward from its edge, and that inward motion performs the action. All four edges work:
+ 
+-- **Left/right edges and overview:** Continuous overview gestures currently only track vertical (`delta_y`) motion. Left and right edge swipes produce primarily horizontal motion (`delta_x`), which the overview ignores. This means `toggle-overview` on a left or right edge swipe will not work. Use top or bottom edges for overview binds. This is a known limitation.
++```kdl
++binds {
++    TouchEdge edge="top" zone="right" { toggle-overview; }
++    TouchEdge edge="left" zone="top"  { open-overview; }
++}
++```
+ 
+ ##### Edge zones
+ 
+diff --git a/src/input/mod.rs b/src/input/mod.rs
+index bd6e356..db7ac19 100644
+--- a/src/input/mod.rs
++++ b/src/input/mod.rs
+@@ -4044,7 +4044,13 @@ impl State {
+                             // No compositor animation.
+                         }
+                     }
+-                    self.niri.gesture_swipe_bind = Some(ActiveSwipeBind { kind, sensitivity });
++                    // No travel direction yet: swiping up performs the action.
++                    let sign = overview_action_sign(&bind.action, is_overview_open);
++                    self.niri.gesture_swipe_bind = Some(ActiveSwipeBind {
++                        kind,
++                        sensitivity,
++                        overview_forward: (0., -sign),
++                    });
+                 } else {
+                     // Discrete action — fire once.
+                     self.do_action(bind.action, bind.allow_when_locked);
+@@ -4104,7 +4110,7 @@ impl State {
+             delta_y = libinput_event.dy_unaccelerated();
+         }
+ 
+-        let uninverted_delta_y = delta_y;
++        let (physical_delta_x, physical_delta_y) = (delta_x, delta_y);
+ 
+         // Read swipe trigger distance from touchpad config.
+         let threshold = {
+@@ -4197,8 +4203,13 @@ impl State {
+                                     // No compositor animation.
+                                 }
+                             }
+-                            self.niri.gesture_swipe_bind =
+-                                Some(ActiveSwipeBind { kind, sensitivity });
++                            let sign = overview_action_sign(&bind.action, is_overview_open);
++                            let (fx, fy) = dominant_axis(cx, cy);
++                            self.niri.gesture_swipe_bind = Some(ActiveSwipeBind {
++                                kind,
++                                sensitivity,
++                                overview_forward: (fx * sign, fy * sign),
++                            });
+                         } else {
+                             // Discrete action — fire once.
+                             if !matches!(bind.action, Action::Noop) {
+@@ -4217,6 +4228,7 @@ impl State {
+         if let Some(ref bind) = self.niri.gesture_swipe_bind {
+             let kind = bind.kind;
+             let sensitivity = bind.sensitivity;
++            let (forward_x, forward_y) = bind.overview_forward;
+             let mut handled = false;
+             match kind {
+                 ContinuousGestureKind::WorkspaceSwitch => {
+@@ -4246,10 +4258,11 @@ impl State {
+                     }
+                 }
+                 ContinuousGestureKind::OverviewToggle => {
++                    let travel = physical_delta_x * forward_x + physical_delta_y * forward_y;
+                     let res = self
+                         .niri
+                         .layout
+-                        .overview_gesture_update(-uninverted_delta_y * sensitivity, timestamp);
++                        .overview_gesture_update(travel * sensitivity, timestamp);
+                     if let Some(redraw) = res {
+                         if redraw {
+                             self.niri.queue_redraw_all();
+@@ -5320,6 +5333,25 @@ pub fn mods_with_tablet_stylus_binds(mod_key: ModKey, binds: &Binds) -> HashSet<
+     )
+ }
+ 
++/// Sign for travel along a bound gesture's direction so that it performs the
++/// overview `action`: `1.` opens the overview, `-1.` closes it.
++fn overview_action_sign(action: &Action, is_overview_open: bool) -> f64 {
++    match action {
++        Action::CloseOverview => -1.,
++        Action::ToggleOverview if is_overview_open => -1.,
++        _ => 1.,
++    }
++}
++
++/// Unit vector along the dominant axis of a swipe, in screen coordinates.
++fn dominant_axis(cx: f64, cy: f64) -> (f64, f64) {
++    if cx.abs() > cy.abs() {
++        (cx.signum(), 0.)
++    } else {
++        (0., cy.signum())
++    }
++}
++
+ fn swipe_trigger(fingers: usize, is_horizontal: bool, cx: f64, cy: f64) -> Option<Trigger> {
+     let Ok(fingers_u8) = u8::try_from(fingers) else {
+         return None;
+@@ -5391,6 +5423,24 @@ fn make_binds_iter<'a>(
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn overview_sign_follows_action() {
++        assert_eq!(overview_action_sign(&Action::OpenOverview, false), 1.);
++        assert_eq!(overview_action_sign(&Action::OpenOverview, true), 1.);
++        assert_eq!(overview_action_sign(&Action::CloseOverview, false), -1.);
++        assert_eq!(overview_action_sign(&Action::CloseOverview, true), -1.);
++        assert_eq!(overview_action_sign(&Action::ToggleOverview, false), 1.);
++        assert_eq!(overview_action_sign(&Action::ToggleOverview, true), -1.);
++    }
++
++    #[test]
++    fn dominant_axis_picks_larger_component() {
++        assert_eq!(dominant_axis(3., -1.), (1., 0.));
++        assert_eq!(dominant_axis(-3., 1.), (-1., 0.));
++        assert_eq!(dominant_axis(1., -3.), (0., -1.));
++        assert_eq!(dominant_axis(1., 3.), (0., 1.));
++    }
++
+     #[test]
+     fn comp_mod_handling() {
+         let bindings = Binds(vec![
+diff --git a/src/input/touch_gesture.rs b/src/input/touch_gesture.rs
+index 84042ab..7e8c9c9 100644
+--- a/src/input/touch_gesture.rs
++++ b/src/input/touch_gesture.rs
+@@ -39,7 +39,9 @@ use smithay::utils::SERIAL_COUNTER;
+ use super::backend_ext::NiriInputBackend as InputBackend;
+ use super::move_grab::MoveGrab;
+ use super::touch_overview_grab::TouchOverviewGrab;
+-use super::{find_configured_bind, modifiers_from_state, AnyStartData};
++use super::{
++    dominant_axis, find_configured_bind, modifiers_from_state, overview_action_sign, AnyStartData,
++};
+ use crate::layout::LayoutElement;
+ use crate::niri::{ActiveTouchBind, PointerVisibility, State, TapCandidate, TouchEdgeSwipeState};
+ use crate::utils::with_toplevel_role;
+@@ -810,11 +812,17 @@ impl State {
+                             handle.cancel(self);
+ 
+                             if let Some(kind) = kind {
++                                let sign = overview_action_sign(
++                                    &action,
++                                    self.niri.layout.is_overview_open(),
++                                );
++                                let (fx, fy) = dominant_axis(cx, cy);
+                                 begin_continuous_gesture(self, kind, pos);
+                                 let active = ActiveTouchBind::Swipe {
+                                     kind,
+                                     sensitivity,
+                                     natural_scroll,
++                                    overview_forward: (fx * sign, fy * sign),
+                                 };
+                                 self.niri.touch_active_bind = Some(active);
+                             } else if !matches!(action, Action::Noop) {
+@@ -952,6 +960,11 @@ impl State {
+ 
+                             if let Some((kind, sensitivity, natural_scroll, action)) = bind_info {
+                                 if let Some(kind) = kind {
++                                    let sign = overview_action_sign(
++                                        &action,
++                                        self.niri.layout.is_overview_open(),
++                                    );
++                                    let (fx, fy) = edge_inward(edge);
+                                     self.niri.touch_edge_swipe =
+                                         Some(TouchEdgeSwipeState::Active {
+                                             edge,
+@@ -960,6 +973,7 @@ impl State {
+                                             kind,
+                                             sensitivity,
+                                             natural_scroll,
++                                            overview_forward: (fx * sign, fy * sign),
+                                             slot: edge_slot,
+                                         });
+                                     handle.cancel(self);
+@@ -981,11 +995,13 @@ impl State {
+                         kind,
+                         sensitivity,
+                         natural_scroll,
++                        overview_forward,
+                         ..
+                     } => {
+                         let kind = *kind;
+                         let sensitivity = *sensitivity;
+                         let natural = *natural_scroll;
++                        let overview_forward = *overview_forward;
+                         // Use edge-slot-only delta, not the combined
+                         // multi-finger delta.
+                         let (edge_dx, edge_dy) = self.niri.touch_frame_edge_delta;
+@@ -998,6 +1014,7 @@ impl State {
+                                 delta_y: edge_dy,
+                                 sensitivity,
+                                 natural,
++                                overview_forward,
+                                 timestamp,
+                             },
+                         );
+@@ -1016,10 +1033,12 @@ impl State {
+                             kind,
+                             sensitivity,
+                             natural_scroll,
++                            overview_forward,
+                         } => {
+                             let kind = *kind;
+                             let sensitivity = *sensitivity;
+                             let natural = *natural_scroll;
++                            let overview_forward = *overview_forward;
+                             feed_continuous_gesture(
+                                 self,
+                                 ContinuousGestureUpdate {
+@@ -1028,6 +1047,7 @@ impl State {
+                                     delta_y,
+                                     sensitivity,
+                                     natural,
++                                    overview_forward,
+                                     timestamp,
+                                 },
+                             );
+@@ -1036,9 +1056,13 @@ impl State {
+                             let kind = *kind;
+                             feed_continuous_pinch(self, kind, timestamp);
+                         }
+-                        ActiveTouchBind::Rotate { kind } => {
++                        ActiveTouchBind::Rotate {
++                            kind,
++                            overview_sign,
++                        } => {
+                             let kind = *kind;
+-                            feed_continuous_rotation(self, kind, timestamp);
++                            let overview_sign = *overview_sign;
++                            feed_continuous_rotation(self, kind, overview_sign, timestamp);
+                         }
+                     }
+                 } else if let Some((cx, cy)) = &mut self.niri.touch_gesture_cumulative {
+@@ -1220,19 +1244,31 @@ impl State {
+ 
+                         if let Some((kind, sensitivity, natural_scroll, action)) = bind_info {
+                             if let Some(kind) = kind {
++                                // Continuing the gesture as it locked performs
++                                // the bound overview action.
++                                let sign = overview_action_sign(
++                                    &action,
++                                    self.niri.layout.is_overview_open(),
++                                );
+                                 begin_continuous_gesture(self, kind, pos);
+                                 let active = if is_rotate {
+-                                    ActiveTouchBind::Rotate { kind }
++                                    ActiveTouchBind::Rotate {
++                                        kind,
++                                        overview_sign: sign * cumulative_rotation.signum(),
++                                    }
+                                 } else if is_pinch {
+                                     ActiveTouchBind::Pinch {
+                                         kind,
+                                         last_spread: current_spread,
++                                        overview_sign: sign * spread_change.signum(),
+                                     }
+                                 } else {
++                                    let (fx, fy) = dominant_axis(cx, cy);
+                                     ActiveTouchBind::Swipe {
+                                         kind,
+                                         sensitivity,
+                                         natural_scroll,
++                                        overview_forward: (fx * sign, fy * sign),
+                                     }
+                                 };
+                                 self.niri.touch_active_bind = Some(active);
+@@ -1458,6 +1494,17 @@ fn begin_continuous_gesture(
+     }
+ }
+ 
++/// Unit vector pointing from a screen edge into the screen: the direction an
++/// edge swipe travels.
++fn edge_inward(edge: ScreenEdge) -> (f64, f64) {
++    match edge {
++        ScreenEdge::Left => (1., 0.),
++        ScreenEdge::Right => (-1., 0.),
++        ScreenEdge::Top => (0., 1.),
++        ScreenEdge::Bottom => (0., -1.),
++    }
++}
++
+ /// Parameters describing a single continuous-gesture motion update.
+ struct ContinuousGestureUpdate {
+     kind: ContinuousGestureKind,
+@@ -1465,6 +1512,7 @@ struct ContinuousGestureUpdate {
+     delta_y: f64,
+     sensitivity: f64,
+     natural: bool,
++    overview_forward: (f64, f64),
+     timestamp: Duration,
+ }
+ 
+@@ -1476,6 +1524,7 @@ fn feed_continuous_gesture(state: &mut State, update: ContinuousGestureUpdate) {
+         delta_y,
+         sensitivity,
+         natural,
++        overview_forward,
+         timestamp,
+     } = update;
+ 
+@@ -1503,11 +1552,13 @@ fn feed_continuous_gesture(state: &mut State, update: ContinuousGestureUpdate) {
+             }
+         }
+         ContinuousGestureKind::OverviewToggle => {
+-            let dy = if natural { delta_y } else { -delta_y };
++            // The bind's own direction says which way opens, so natural
++            // scroll has nothing to flip here.
++            let travel = delta_x * overview_forward.0 + delta_y * overview_forward.1;
+             if let Some(redraw) = state
+                 .niri
+                 .layout
+-                .overview_gesture_update(dy * sensitivity, timestamp)
++                .overview_gesture_update(travel * sensitivity, timestamp)
+             {
+                 if redraw {
+                     state.niri.queue_redraw_all();
+@@ -1527,8 +1578,8 @@ fn feed_continuous_gesture(state: &mut State, update: ContinuousGestureUpdate) {
+ /// (3-finger, 4-finger, 5-finger pinches all ride this path).
+ ///
+ /// Sign convention: positive incremental spread = pinch-out (fingers spreading),
+-/// negative = pinch-in. For OverviewToggle we negate so pinch-in opens, matching
+-/// the legacy hardcoded behavior.
++/// negative = pinch-in. For OverviewToggle the bind's `overview_sign` maps
++/// that onto open/close so continuing the pinch performs the bound action.
+ ///
+ /// Uses `pinch_sensitivity` from the touchscreen gestures config for the
+ /// animation drive — not the bind's `sensitivity` property. Pinch has its
+@@ -1547,17 +1598,21 @@ fn feed_continuous_pinch(state: &mut State, kind: ContinuousGestureKind, timesta
+     // Destructure the active Pinch variant directly. If the active bind is
+     // anything else (or None), something is badly wrong with the dispatch in
+     // on_touch_motion — bail out cleanly rather than panic.
+-    let Some(ActiveTouchBind::Pinch { last_spread, .. }) = state.niri.touch_active_bind.as_mut()
++    let Some(ActiveTouchBind::Pinch {
++        last_spread,
++        overview_sign,
++        ..
++    }) = state.niri.touch_active_bind.as_mut()
+     else {
+         return;
+     };
+     let incremental = current_spread - *last_spread;
+     *last_spread = current_spread;
++    let overview_sign = *overview_sign;
+ 
+     match kind {
+         ContinuousGestureKind::OverviewToggle => {
+-            // Pinch-in (negative incremental) → positive anim delta → overview opens.
+-            let delta = -incremental * pinch_sensitivity;
++            let delta = incremental * overview_sign * pinch_sensitivity;
+             if let Some(redraw) = state.niri.layout.overview_gesture_update(delta, timestamp) {
+                 if redraw {
+                     state.niri.queue_redraw_all();
+@@ -1604,9 +1659,14 @@ fn feed_continuous_pinch(state: &mut State, kind: ContinuousGestureKind, timesta
+ ///
+ /// The rotation is converted to a linear animation delta by multiplying by
+ /// `pinch_sensitivity` (same knob as pinch — rotation shares the "radial
+-/// gesture" category). For OverviewToggle, CCW opens the overview to mirror
+-/// the pinch-in → open convention (both are "gather inward" motions).
+-fn feed_continuous_rotation(state: &mut State, kind: ContinuousGestureKind, timestamp: Duration) {
++/// gesture" category). For OverviewToggle, `overview_sign` maps the rotation
++/// onto open/close so continuing it performs the bound action.
++fn feed_continuous_rotation(
++    state: &mut State,
++    kind: ContinuousGestureKind,
++    overview_sign: f64,
++    timestamp: Duration,
++) {
+     let pinch_sensitivity = {
+         let config = state.niri.config.borrow();
+         config.input.touchscreen.pinch_sensitivity()
+@@ -1630,12 +1690,10 @@ fn feed_continuous_rotation(state: &mut State, kind: ContinuousGestureKind, time
+ 
+     match kind {
+         ContinuousGestureKind::OverviewToggle => {
+-            // CCW (positive frame_rotation) → positive anim delta → overview
+-            // opens. Matches the pinch-in "gather inward" convention.
+             if let Some(redraw) = state
+                 .niri
+                 .layout
+-                .overview_gesture_update(anim_delta, timestamp)
++                .overview_gesture_update(anim_delta * overview_sign, timestamp)
+             {
+                 if redraw {
+                     state.niri.queue_redraw_all();
+diff --git a/src/niri.rs b/src/niri.rs
+index ab8a51c..cefd3a4 100644
+--- a/src/niri.rs
++++ b/src/niri.rs
+@@ -244,6 +244,9 @@ pub enum TouchEdgeSwipeState {
+         kind: ContinuousGestureKind,
+         sensitivity: f64,
+         natural_scroll: bool,
++        /// Travel direction that opens the overview; see
++        /// `ActiveTouchBind::Swipe::overview_forward`.
++        overview_forward: (f64, f64),
+         slot: Option<TouchSlot>,
+     },
+ }
+@@ -252,6 +255,9 @@ pub enum TouchEdgeSwipeState {
+ pub struct ActiveSwipeBind {
+     pub kind: ContinuousGestureKind,
+     pub sensitivity: f64,
++    /// Physical travel direction that opens the overview; see
++    /// `ActiveTouchBind::Swipe::overview_forward`.
++    pub overview_forward: (f64, f64),
+ }
+ 
+ /// State for an active multi-finger touch gesture (after bind matched).
+@@ -266,6 +272,10 @@ pub enum ActiveTouchBind {
+         kind: ContinuousGestureKind,
+         sensitivity: f64,
+         natural_scroll: bool,
++        /// Unit travel direction that opens the overview: the direction the
++        /// swipe locked in, negated when the bound action closes it. Only
++        /// read for `OverviewToggle`.
++        overview_forward: (f64, f64),
+     },
+     Pinch {
+         kind: ContinuousGestureKind,
+@@ -273,9 +283,17 @@ pub enum ActiveTouchBind {
+         /// current spread to produce the incremental delta that drives the
+         /// animation.
+         last_spread: f64,
++        /// Sign applied to spread growth so that continuing the pinch
++        /// performs the bound overview action. Only read for
++        /// `OverviewToggle`.
++        overview_sign: f64,
+     },
+     Rotate {
+         kind: ContinuousGestureKind,
++        /// Sign applied to CCW rotation so that continuing the rotation
++        /// performs the bound overview action. Only read for
++        /// `OverviewToggle`.
++        overview_sign: f64,
+     },
+ }
+ 

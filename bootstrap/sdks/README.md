@@ -1,0 +1,100 @@
+# sdks
+
+Optional. The software-development toolchain, kept out of the main ladder because
+none of it is needed for a working niri session: the main ladder builds a
+session, this builds somewhere to write code in it. **Nothing in the main ladder
+depends on this**, and it can be removed without touching anything else.
+
+It is its own ladder, run with the same runner from the repo root:
+
+```
+bun run ladder sdks list
+bun run ladder sdks plan
+bun run ladder sdks up
+```
+
+Both installation modes apply, as everywhere else: `ROOT_MNT` in `.env` or
+`--live` decides whether it writes into a mounted target root or into the running
+system.
+
+- `10-toolchain` — cmake, unzip, autoconf; fnm with the latest Node LTS, pnpm
+  from that npm, and Command Code from pnpm; rustup; and Zed.
+- `20-git` — the git presentation config: the `stat` and `https-to-ssh` aliases,
+  delta as the pager with its colours, and the global ignore file; plus the
+  `git-delta` and `bat` packages, and identity and SSH commit signing from
+  `.env`.
+
+## What it installs, and where
+
+| tool | from | lives in |
+| --- | --- | --- |
+| `cmake`, `unzip`, `autoconf`, `zed` | the repositories | `/usr` |
+| `fnm` | the repositories | `/usr/bin/fnm` |
+| Node LTS | `fnm install --lts` | `~/.local/share/fnm` |
+| `pnpm` | `npm install -g`, using the fnm node | `~/.local/share/fnm/aliases/default/bin` |
+| `command-code` | `pnpm add -g` | `~/.local/share/pnpm` |
+| `rustup` | rustup.rs, `--no-modify-path` | `~/.cargo`, `~/.rustup` |
+| `git-delta`, `bat` | the repositories | `/usr` |
+| git aliases, delta pager | `files/git/config` + `.env` | `~/.config/git/config` |
+| global gitignore | `files/git/ignore` | `~/.config/git/ignore` |
+
+Node's version is fnm's, not the repositories', so it can be switched per project.
+`pnpm` is installed with the npm that comes *with* that Node, so the two stay
+paired.
+
+## PATH
+
+A fish `conf.d` snippet is written to
+`~/.config/fish/conf.d/sdks.fish`, prepending `~/.cargo/bin` and
+`~/.local/share/pnpm` and sourcing `fnm env --use-on-cd --shell fish`. It is a
+separate file rather than an edit to `config.fish`, because `90-fish` in the main
+ladder owns that file; `down` deletes the snippet and nothing else.
+
+Open a new shell afterwards. The step itself does not touch the running one.
+
+## rustup is not a distro package, on purpose
+
+`105-niri-gestures` in the main ladder builds the patched niri with rustup's
+cargo. It calls the same `ensureRustup()` helper this ladder uses, so the main
+ladder still works end to end without this one having run — and no distro `rust`
+is ever installed. If you do have the repositories' `rust` package for some other
+reason, `sudo pacman -Rns rust` removes it; nothing here needs it.
+
+One consequence worth knowing, since it caused a real build failure: makepkg's
+`lto` option compiles C with `-flto=auto`, and rustup's rustc links with
+`rust-lld`, which cannot read GCC's LTO bytecode. The niri PKGBUILD therefore
+sets `options=('!lto')`.
+
+## Git
+
+`20-git` writes `~/.config/git/config` — the XDG location, not `~/.gitconfig`.
+Git reads both, and `~/.gitconfig` wins for single-valued keys, so a hand-written
+`~/.gitconfig` can sit beside it without either file overwriting the other.
+
+The vendored `files/git/config` carries only what is the same everywhere: the two
+aliases, `core.pager = delta`, `interactive.diffFilter`, the `[delta]` colours and
+`merge.conflictStyle = zdiff3`. Identity comes from `.env`:
+
+| key | becomes |
+| --- | --- |
+| `GIT_NAME`, `GIT_EMAIL` | `[user] name`, `email`; skip both and there is no `[user]` section |
+| `GIT_SIGNING_KEY` | `user.signingkey`, plus `gpg.format = ssh`, `commit.gpgsign`, `tag.gpgSign` |
+
+Setting `GIT_SIGNING_KEY` is what turns signing on. Signing needs the matching
+*private* key next to it and `ssh-keygen` on PATH; the step warns if the public
+key it was given is unreadable, because otherwise every commit fails later with a
+much worse message.
+
+`core.excludesFile` is deliberately not set: git's default excludes path is
+`$XDG_CONFIG_HOME/git/ignore`, which is exactly where the ignore file goes.
+
+## Undo
+
+`down` removes the fish snippet, the global `command-code` and `pnpm`, rustup
+(through `rustup self uninstall`), `~/.local/share/fnm` and
+`~/.local/share/pnpm`, then the packages. Node versions and pnpm's store live
+inside those two directories, so they go with them.
+
+`20-git`'s `down` restores whatever `~/.config/git/{config,ignore}` held before
+the first run — or removes them if there was nothing — and uninstalls `git-delta`
+and `bat`.

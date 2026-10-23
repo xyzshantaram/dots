@@ -1,6 +1,6 @@
 /**
  * run.ts — the ladder runner. Lives at the repo root; the steps live in
- * sensible-bootstrap/.
+ * bootstrap/.
  *
  *   bun run ladder list                        every step, with its description
  *   bun run ladder plan [from] [to]            what a range would run
@@ -8,6 +8,7 @@
  *   bun run ladder down [from] [to]            run them in reverse order
  *   bun run ladder up --only <step>            exactly one step
  *   bun run ladder dualboot-utils up           another ladder, by name
+ *   bun run ladder up --live                   ... into this system, not a target
  *
  * `bun run ladder` is the package.json script for this file, so no `sudo` is
  * needed on the command line: up and down escalate themselves, once, and
@@ -19,7 +20,7 @@
  *
  * The first argument names a ladder when it is not one of the four verbs. Names
  * are looked for at the repo root and then inside the main ladder, so both
- * `dualboot-utils` and `sensible-bootstrap` work. Only the steps directly inside
+ * `dualboot-utils` and `bootstrap` work. Only the steps directly inside
  * that directory are read: nothing is traversed, so the main ladder never picks
  * up the dualboot one, and that one never reaches back. `--ladder <dir>` is the
  * same thing as an explicit flag.
@@ -27,14 +28,19 @@
  * With only `from` given the range runs to the last step, so `up 130-paru`
  * resumes there rather than running that one step alone. `--only` is how to ask
  * for a single step.
+ *
+ * `--live` sets ROOT_MNT=/ for the run, which points every step at the running
+ * system instead of at a mounted target root. It is exactly the same as writing
+ * ROOT_MNT=/ in .env, for one run; the steps themselves do not care which way
+ * it was asked for.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import process from "node:process";
-import { parseFrontmatter } from "./sensible-bootstrap/lib.ts";
+import { parseFrontmatter } from "./bootstrap/lib.ts";
 
 const ROOT = import.meta.dir;
-const MAIN_LADDER = join(ROOT, "sensible-bootstrap");
+const MAIN_LADDER = join(ROOT, "bootstrap");
 
 /** Lives in the main ladder but is a helper, not a phase of the build. */
 const SKIP_IN_MAIN = new Set(["20-chroot.ts"]);
@@ -49,6 +55,7 @@ type Args = {
   from?: string;
   to?: string;
   only?: string;
+  live?: boolean;
 };
 
 function fail(message: string): never {
@@ -72,7 +79,7 @@ function stepsIn(dir: string): Step[] {
  * Finds the ladder directory.
  *
  * Names are looked for at the repo root first, then inside the main ladder, so
- * `dualboot-utils` and `sensible-bootstrap` both work. Absolute paths are used
+ * `dualboot-utils` and `bootstrap` both work. Absolute paths are used
  * as given. No recursion either way.
  */
 function resolveLadder(name?: string): string {
@@ -105,6 +112,7 @@ function parseArgs(argv: string[]): Args {
     else if (arg.startsWith("--ladder=")) args.ladder = arg.slice("--ladder=".length);
     else if (arg === "--only") args.only = take(arg);
     else if (arg.startsWith("--only=")) args.only = arg.slice("--only=".length);
+    else if (arg === "--live") args.live = true;
     else if (arg.startsWith("-")) fail(`unknown flag ${arg}`);
     else positional.push(arg);
   }
@@ -159,6 +167,14 @@ async function runStep(dir: string, step: Step, action: "up" | "down"): Promise<
 
 const args = parseArgs(process.argv.slice(2));
 
+// --live points every step at the running system. Set on this process's
+// environment, which both the escalation re-exec below and each step spawn
+// inherit, so nothing has to be threaded through argv.
+if (args.live) {
+  process.env.ROOT_MNT = "/";
+  console.error("run: --live: the target is this system (ROOT_MNT=/)");
+}
+
 // up and down touch the disk, and every step asserts root, so escalate once
 // here instead of making the caller remember. list and plan are read-only, so
 // they stay unprivileged and answer without a password prompt.
@@ -174,7 +190,8 @@ const dir = resolveLadder(args.ladder);
 
 /** The skip list belongs to the main ladder, not to any other directory. */
 const skip = dir === resolve(MAIN_LADDER) ? SKIP_IN_MAIN : new Set<string>();
-const usage = "usage: bun run ladder [ladder] list|plan|up|down [from] [to] [--only step]";
+const usage =
+  "usage: bun run ladder [ladder] list|plan|up|down [from] [to] [--only step] [--live]";
 
 switch (args.command) {
   case "list": {

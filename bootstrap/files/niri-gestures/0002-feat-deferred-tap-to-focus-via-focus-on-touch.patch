@@ -1,0 +1,307 @@
+From 870f6e8220988523751fa94c6b428d510836b1d7 Mon Sep 17 00:00:00 2001
+From: julian <julian@jc84.com>
+Date: Thu, 11 Jun 2026 09:44:36 +0800
+Subject: [PATCH 02/11] feat: deferred tap-to-focus via focus-on-touch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add `input { touchscreen { focus-on-touch "touch-down" | "touch-up" } }`.
+
+With "touch-down" (default, current behavior) the window under a touch
+is activated the moment the first finger lands. On a touchscreen the
+first finger of a multi-finger gesture therefore focuses — and scrolls
+the view to fit — whatever window it happens to land on, before the
+recognizer has any chance to claim the sequence as a gesture. The
+client-side touch is already taken back via wl_touch.cancel at the
+gesture transition, but the compositor-side focus change was not.
+
+With "touch-up", activation is recorded as pending at touch-down and
+committed only when the last finger lifts. The gesture-claim transition
+and touch-cancel clear the pending activation, so compositor gestures
+never move focus. A plain tap focuses exactly as before, just on lift.
+
+Mod+touch still activates immediately (the move grab needs the window
+active, and Mod is an explicit request for a compositor action).
+
+xdg-activation self-requests are routed through the same deferral:
+Chromium-based browsers mint an activation token from the forwarded
+touch-down serial and request self-activation, which would bypass the
+pending mechanism. When the requested window is already pending
+deferred tap-to-focus, the request is left to the pending commit
+(focus on lift) instead of activating immediately.
+
+Also scrub two stale IPC-progress doc mentions left over from the
+gesture-IPC extraction.
+---
+ docs/wiki/Configuration:-Input.md |  3 ++-
+ niri-config/src/input.rs          | 32 ++++++++++++++++++++++++
+ niri-config/src/lib.rs            |  4 +++
+ resources/default-config.kdl      |  8 +++++-
+ src/handlers/mod.rs               | 15 ++++++++---
+ src/input/touch_gesture.rs        | 41 +++++++++++++++++++++++++++++--
+ src/niri.rs                       |  7 ++++++
+ 7 files changed, 102 insertions(+), 8 deletions(-)
+
+diff --git a/docs/wiki/Configuration:-Input.md b/docs/wiki/Configuration:-Input.md
+index 96d5e9b..2d8577b 100644
+--- a/docs/wiki/Configuration:-Input.md
++++ b/docs/wiki/Configuration:-Input.md
+@@ -294,6 +294,7 @@ Settings specific to `tablet` and `touchscreen`:
+ Settings specific to `touchscreen`:
+ 
+ - `natural-scroll`: <sup>Since: next</sup> if set, inverts the scrolling direction for touchscreen swipe gestures.
++- `focus-on-touch "touch-down" | "touch-up"`: <sup>Since: next</sup> when tap-to-focus commits. `"touch-down"` (default) focuses the window under the finger as soon as it lands. `"touch-up"` defers focus until the touch ends, and skips it entirely if the touch turned into a compositor gesture — so the first finger of a multi-finger gesture no longer focuses (and scrolls the view to fit) whatever window it happens to land on. With `"touch-up"`, a plain tap focuses exactly as before, just on finger lift. This also covers clients that request self-activation via `xdg-activation` from the forwarded touch-down serial (e.g. Chromium-based browsers): their request is routed through the same deferral instead of focusing immediately.
+ - `gestures {}`: <sup>Since: next</sup> tuning parameters for touchscreen gesture recognition.
+ 
+ > [!NOTE]
+@@ -302,7 +303,7 @@ Settings specific to `touchscreen`:
+ 
+ The `touchscreen { gestures { } }` tuning parameters are:
+ 
+-All knobs are grouped as: **trigger** (classifier commit gates), **dominance** (3-way race tuning), **progress** (IPC output scaling), and **misc**.
++All knobs are grouped as: **trigger** (classifier commit gates), **dominance** (3-way race tuning), and **misc**.
+ 
+ **Swipe:**
+ 
+diff --git a/niri-config/src/input.rs b/niri-config/src/input.rs
+index 11f125a..1673ad7 100644
+--- a/niri-config/src/input.rs
++++ b/niri-config/src/input.rs
+@@ -406,6 +406,8 @@ pub struct Touchscreen {
+     pub calibration_matrix: Option<Vec<f32>>,
+     #[knuffel(child, unwrap(argument))]
+     pub map_to_output: Option<String>,
++    #[knuffel(child, unwrap(argument, str))]
++    pub focus_on_touch: Option<FocusOnTouch>,
+     #[knuffel(child)]
+     pub gestures: Option<TouchscreenGesturesConfig>,
+ }
+@@ -720,6 +722,36 @@ impl FromStr for WarpMouseToFocusMode {
+     }
+ }
+ 
++/// When touchscreen tap-to-focus commits (`input { touchscreen {
++/// focus-on-touch "..." } }`).
++#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
++pub enum FocusOnTouch {
++    /// Focus the window under the finger as soon as it lands (default,
++    /// matches upstream niri behavior).
++    #[default]
++    TouchDown,
++    /// Defer focus until the touch sequence ends. If the sequence is
++    /// claimed as a compositor gesture (3+ fingers or an edge swipe),
++    /// focus never moves — so the first finger of a multi-finger swipe
++    /// can no longer focus (and scroll the view to fit) whatever window
++    /// it happened to land on.
++    TouchUp,
++}
++
++impl FromStr for FocusOnTouch {
++    type Err = miette::Error;
++
++    fn from_str(s: &str) -> Result<Self, Self::Err> {
++        match s {
++            "touch-down" => Ok(Self::TouchDown),
++            "touch-up" => Ok(Self::TouchUp),
++            _ => Err(miette!(
++                r#"invalid focus-on-touch, can be "touch-down" or "touch-up""#
++            )),
++        }
++    }
++}
++
+ #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+ pub enum ModKey {
+     Ctrl,
+diff --git a/niri-config/src/lib.rs b/niri-config/src/lib.rs
+index 0abdeae..74be7ee 100644
+--- a/niri-config/src/lib.rs
++++ b/niri-config/src/lib.rs
+@@ -745,6 +745,7 @@ mod tests {
+ 
+                 touchscreen {
+                     map-to-output "eDP-1"
++                    focus-on-touch "touch-up"
+                 }
+ 
+                 disable-power-key-handling
+@@ -1153,6 +1154,9 @@ mod tests {
+                     map_to_output: Some(
+                         "eDP-1",
+                     ),
++                    focus_on_touch: Some(
++                        TouchUp,
++                    ),
+                     gestures: None,
+                 },
+                 disable_power_key_handling: true,
+diff --git a/resources/default-config.kdl b/resources/default-config.kdl
+index d316a71..eb3f771 100644
+--- a/resources/default-config.kdl
++++ b/resources/default-config.kdl
+@@ -81,6 +81,13 @@ input {
+     //     // natural-scroll
+     //     // map-to-output "eDP-1"
+     //     //
++    //     // When tap-to-focus commits. "touch-down" (default): focus the
++    //     // window as soon as the first finger lands. "touch-up": defer
++    //     // focus until the touch ends, so the first finger of a
++    //     // multi-finger gesture doesn't focus (and scroll the view to)
++    //     // whatever window it happens to land on.
++    //     // focus-on-touch "touch-up"
++    //     //
+     //     // Touchscreen gesture binds live in the main binds {} block
+     //     // using parameterized triggers with KDL properties, e.g.
+     //     //   TouchSwipe  fingers=3 direction="up"   { focus-workspace-up; }
+@@ -109,7 +116,6 @@ input {
+     //     //     // Default 1.2 = small pinch-priority bias at high finger
+     //     //     // counts. Set 1.0 to disable.
+     //     //     swipe-multi-finger-scale 1.2
+-    //     //     // IPC progress scaling (doesn't affect classification).
+     //     //
+     //     //     // Rotation — angles in DEGREES.
+     //     //     rotation-trigger-angle 20.0    // ° before rotation can latch
+diff --git a/src/handlers/mod.rs b/src/handlers/mod.rs
+index f55f4d6..716cd50 100644
+--- a/src/handlers/mod.rs
++++ b/src/handlers/mod.rs
+@@ -815,6 +815,11 @@ impl XdgActivationHandler for State {
+         if token_data.timestamp.elapsed() < XDG_ACTIVATION_TOKEN_TIMEOUT {
+             if let Some((mapped, _)) = self.niri.layout.find_window_and_output_mut(&surface) {
+                 let window = mapped.window.clone();
++                // Deferred tap-to-focus (`focus-on-touch "touch-up"`): skip
++                // activation while this window is pending from an in-progress
++                // touch. Chromium self-activates with the touch-down serial,
++                // which would defeat the deferral; let the pending path decide.
++                let touch_pending = self.niri.touch_pending_activation.as_ref() == Some(&window);
+                 match mapped.rules().on_xdg_activate {
+                     Some(niri_config::OnXdgActivate::Ignore) => {}
+                     Some(niri_config::OnXdgActivate::SetUrgent) => {
+@@ -822,15 +827,17 @@ impl XdgActivationHandler for State {
+                         self.niri.queue_redraw_all();
+                     }
+                     Some(niri_config::OnXdgActivate::Focus) => {
+-                        self.niri.layout.activate_window(&window);
+-                        self.niri.layer_shell_on_demand_focus = None;
+-                        self.niri.queue_redraw_all();
++                        if !touch_pending {
++                            self.niri.layout.activate_window(&window);
++                            self.niri.layer_shell_on_demand_focus = None;
++                            self.niri.queue_redraw_all();
++                        }
+                     }
+                     None => {
+                         if token_data.user_data.get::<UrgentOnlyMarker>().is_some() {
+                             mapped.set_urgent(true);
+                             self.niri.queue_redraw_all();
+-                        } else {
++                        } else if !touch_pending {
+                             self.niri.layout.activate_window(&window);
+                             self.niri.layer_shell_on_demand_focus = None;
+                             self.niri.queue_redraw_all();
+diff --git a/src/input/touch_gesture.rs b/src/input/touch_gesture.rs
+index aef04f5..88851e1 100644
+--- a/src/input/touch_gesture.rs
++++ b/src/input/touch_gesture.rs
+@@ -27,7 +27,7 @@ use std::time::{Duration, Instant};
+ use niri_config::binds::{
+     PinchDirection, RotateDirection, SwipeDirection, Trigger, MAX_FINGERS, MIN_FINGERS,
+ };
+-use niri_config::input::{EdgeZone, ScreenEdge};
++use niri_config::input::{EdgeZone, FocusOnTouch, ScreenEdge};
+ use niri_config::touch_binds::{continuous_gesture_kind, ContinuousGestureKind, TouchGestureType};
+ use niri_config::Action;
+ use smithay::backend::input::{Event as _, TouchEvent};
+@@ -309,7 +309,30 @@ impl State {
+                 );
+                 handle.set_grab(self, grab, serial);
+             } else if let Some((window, _)) = under.window {
+-                self.niri.layout.activate_window(&window);
++                // Deferred tap-to-focus (`focus-on-touch "touch-up"`): record
++                // the window instead of activating now, and commit on
++                // touch-up only if the sequence never becomes a compositor
++                // gesture. Otherwise the first finger of a multi-finger
++                // gesture focuses (and scrolls the view to fit) whatever
++                // window it lands on before the other fingers arrive.
++                // Mod+touch activates immediately regardless — the move grab
++                // below needs the window active, and Mod is an explicit
++                // request for a compositor action.
++                let defer_focus = !mod_down
++                    && self
++                        .niri
++                        .config
++                        .borrow()
++                        .input
++                        .touchscreen
++                        .focus_on_touch
++                        .unwrap_or_default()
++                        == FocusOnTouch::TouchUp;
++                if defer_focus {
++                    self.niri.touch_pending_activation = Some(window.clone());
++                } else {
++                    self.niri.layout.activate_window(&window);
++                }
+ 
+                 // Check if we need to start a touch move grab.
+                 if mod_down {
+@@ -363,6 +386,9 @@ impl State {
+                 tracking_gesture,
+                 in_edge_zone,
+             );
++            // The sequence is now claimed as a compositor gesture — drop any
++            // deferred tap-to-focus so the gesture leaves focus untouched.
++            self.niri.touch_pending_activation = None;
+             // Transition into gesture tracking — if earlier fingers in this
+             // sequence were already forwarded to a client as wl_touch.down,
+             // their matching .up events will be suppressed by this same
+@@ -560,6 +586,16 @@ impl State {
+             self.niri.touch_gesture_cumulative_rotation = 0.0;
+             self.niri.touch_gesture_previous_angles.clear();
+ 
++            // Deferred tap-to-focus commit (`focus-on-touch "touch-up"`):
++            // the sequence ended without being claimed as a compositor
++            // gesture (a claim clears this at the transition), so it was a
++            // plain app interaction — focus the window it landed on now.
++            if let Some(window) = self.niri.touch_pending_activation.take() {
++                self.niri.layout.activate_window(&window);
++                // FIXME: granular.
++                self.niri.queue_redraw_all();
++            }
++
+             // End any ongoing gesture animations.
+             if let Some(output) = self.niri.layout.workspace_switch_gesture_end(Some(true)) {
+                 self.niri.queue_redraw(&output);
+@@ -1224,6 +1260,7 @@ impl State {
+         self.niri.touch_gesture_cumulative_rotation = 0.0;
+         self.niri.touch_gesture_previous_angles.clear();
+         self.niri.touch_tap_candidate = None;
++        self.niri.touch_pending_activation = None;
+         self.niri.touchscreen_gesture_passthrough = false;
+         self.niri.touch_frame_dirty = false;
+         self.niri.touch_frame_delta = (0., 0.);
+diff --git a/src/niri.rs b/src/niri.rs
+index 95d49f5..ab8a51c 100644
+--- a/src/niri.rs
++++ b/src/niri.rs
+@@ -528,6 +528,12 @@ pub struct Niri {
+     /// Tap candidate for N-finger tap detection. Runs in parallel with
+     /// swipe/pinch/rotate recognition. Killed by wobble or recognizer lock.
+     pub touch_tap_candidate: Option<TapCandidate>,
++    /// Window awaiting deferred tap-to-focus activation (`focus-on-touch
++    /// "touch-up"`). Recorded at touch-down instead of activating
++    /// immediately; committed in `on_touch_up` when the last finger lifts,
++    /// unless the sequence was claimed as a compositor gesture in between
++    /// (the claim transition clears this, as does `on_touch_cancel`).
++    pub touch_pending_activation: Option<Window>,
+     /// Touchpad hold-gesture tracking for N-finger tap-hold detection.
+     /// Stores finger_count from GestureHoldBegin. Cleared on
+     /// GestureHoldEnd; if !cancelled and fingers >= 3, fires a
+@@ -2915,6 +2921,7 @@ impl Niri {
+             touch_gesture_cumulative_rotation: 0.0,
+             touch_gesture_previous_angles: HashMap::new(),
+             touch_tap_candidate: None,
++            touch_pending_activation: None,
+             touchpad_hold_begin: None,
+             touchpad_drag_pending: None,
+             touchpad_pinch_fingers: None,

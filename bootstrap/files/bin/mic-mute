@@ -1,0 +1,30 @@
+#!/bin/sh
+# mic-mute - mute the microphone and keep the ThinkPad mic LED honest.
+#
+# niri binds XF86AudioMicMute to this (see config.kdl). Two things have to
+# happen together:
+#
+#   - PipeWire's default source mute, which is what applications honour;
+#   - the ALSA capture switch, which is what snd_ctl_led watches to drive
+#     /sys/class/leds/platform::micmute.
+#
+# Toggling only the PipeWire source leaves the LED alone, which is how this
+# machine's LED ended up stuck on: niri used to run `wpctl set-mute
+# @DEFAULT_AUDIO_SOURCE@ toggle` by itself, and the LED never moved.
+#
+# The switch is set to *match* PipeWire rather than toggled in parallel, so the
+# two cannot drift apart on a double press or a race.
+#
+# Card 1 ("Generic_1") is the one the base ThinkPad LED quirk binds:
+# /sys/class/sound/ctl-led/mic/card1/list reports numid 7, and that card's
+# codec exposes exactly one capture switch, "Capture Switch". Needs
+# alsa-utils for amixer (installed by 40-packages.ts).
+set -u
+
+wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+
+state="$(wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null || echo)"
+case "$state" in
+    *MUTED*) amixer -c 1 sset 'Capture Switch' nocap >/dev/null 2>&1 || true ;;
+    *)       amixer -c 1 sset 'Capture Switch' cap   >/dev/null 2>&1 || true ;;
+esac

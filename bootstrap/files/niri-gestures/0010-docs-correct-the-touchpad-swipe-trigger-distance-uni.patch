@@ -1,0 +1,49 @@
+From 4dab470a1262b93fba3017e4177ac36d9dd5fed0 Mon Sep 17 00:00:00 2001
+From: julian_lenovo_new <julian@jc84.com>
+Date: Mon, 5 Oct 2026 19:46:44 +0800
+Subject: [PATCH 10/11] docs: correct the touchpad swipe-trigger-distance units
+
+The touchpad `swipe-trigger-distance` was documented as
+acceleration-adjusted, but the swipe handler compares it against
+libinput's unaccelerated gesture deltas, which libinput normalizes to a
+1000 dpi device.
+
+Say so, and give a sense of scale: the default of 16 is under half a
+millimetre of travel, so lower values are indistinguishable, and a
+noticeably more deliberate swipe needs values in the tens or low
+hundreds.
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+---
+ docs/wiki/Configuration:-Input.md | 2 +-
+ niri-config/src/input.rs          | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/docs/wiki/Configuration:-Input.md b/docs/wiki/Configuration:-Input.md
+index 832f828..31dc16c 100644
+--- a/docs/wiki/Configuration:-Input.md
++++ b/docs/wiki/Configuration:-Input.md
+@@ -352,7 +352,7 @@ input {
+ 
+ The `touchpad { gestures { } }` subblock contains tuning parameters for touchpad gesture recognition. Like touchscreen, the actual gesture binds (`TouchpadSwipe fingers=N direction="..."`, `TouchpadPinch fingers=N direction="..."`) live in the main `binds {}` block.
+ 
+-- `swipe-trigger-distance <float>`: libinput delta units of centroid motion before a swipe gesture commits. These units are acceleration-adjusted and not directly comparable to touchscreen pixels. Default: `16.0`.
++- `swipe-trigger-distance <float>`: libinput delta units of finger motion before a swipe gesture commits. These are libinput's unaccelerated deltas, normalized to a 1000 dpi device, so one unit is nominally about 0.025 mm of travel and they are not comparable to touchscreen pixels. The default is under half a millimetre, so lower values feel the same; raise it into the tens or low hundreds to require a more deliberate swipe. Default: `16.0`.
+ - `pinch-trigger-scale <float>`: `|scale - 1.0|` required before a `TouchpadPinch` bind fires. libinput normalizes pinch scale (1.0 = no change, 1.5 = 50% spread out, 0.5 = 50% spread in), so this is a unitless ratio and **not** directly comparable to the touchscreen `pinch-trigger-distance` (which is in pixels). Fires once per gesture when the threshold is crossed; direction is picked from the sign of the scale change. Default: `0.15`.
+ 
+ Example:
+diff --git a/niri-config/src/input.rs b/niri-config/src/input.rs
+index a35ff23..6e5cb70 100644
+--- a/niri-config/src/input.rs
++++ b/niri-config/src/input.rs
+@@ -708,8 +708,8 @@ pub struct TouchscreenGesturesConfig {
+ #[derive(knuffel::Decode, Debug, Default, Clone, PartialEq)]
+ pub struct TouchpadGesturesConfig {
+     /// Swipe commit gate: libinput delta units of centroid motion before
+-    /// a swipe gesture latches. These units are acceleration-adjusted
+-    /// and not directly comparable to touchscreen pixels. Default: 16.0.
++    /// a swipe gesture latches. These are unaccelerated deltas normalized
++    /// to 1000 dpi, not comparable to touchscreen pixels. Default: 16.0.
+     #[knuffel(child, unwrap(argument))]
+     pub swipe_trigger_distance: Option<f64>,
+     /// Pinch commit gate: `|scale - 1.0|` must exceed this unitless scale

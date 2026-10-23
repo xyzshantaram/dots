@@ -1,14 +1,16 @@
 # dots
 
-My dotfiles, plus `sensible-bootstrap/`: the ladder that takes a fresh Arch install to a working niri session.
+My dotfiles, plus `bootstrap/`: the ladder that takes a fresh Arch install to a working niri session.
 
-## sensible-bootstrap
+## bootstrap
 
 - Small reversible steps, one Bun/TypeScript file each, one verb: `up` or `down`.
 - `bun run ladder up` runs them in order, stops at the first failure, and escalates itself — no `sudo` to type.
 - `list` and `plan` are read-only and never ask for a password.
 - `plan` shows a range without running it; `--only <step>` runs exactly one.
+- `ROOT_MNT=/` in `.env` (or `--live`) points the whole ladder at the running system instead of a mounted target root.
 - `bun run ladder dualboot-utils up` runs another ladder directory. No recursion.
+- `bun run ladder sdks up` is a separate, optional ladder: the developer toolchain (Node through fnm, pnpm, Command Code, rustup, Zed).
 - Idempotent on `up`, exact on `down`.
 - Depends on nothing outside itself — assets come from `files/`, never from another installed OS.
 - `verify.sh` is read-only and safe from either side.
@@ -17,7 +19,7 @@ My dotfiles, plus `sensible-bootstrap/`: the ladder that takes a fresh Arch inst
 run.ts            the runner, for every ladder
 package.json      `bun run ladder`, `bun run verify`
 .env              machine values, shared by both ladders (.env.example is the template)
-sensible-bootstrap/
+bootstrap/
   dualboot-utils/   chainload entry, hibernation marker — only when two OSes share a disk
   files/            vendored assets
   verify.sh
@@ -35,13 +37,15 @@ sensible-bootstrap/
 
 **Session**
 
-- Super/CapsLock tap opens the app drawer. niri cannot bind a bare modifier, so keyd resolves it: `overload(meta, f13)`.
+- Super/CapsLock tap opens the launcher (`vicinae`). niri cannot bind a bare modifier, so keyd resolves it: `overload(meta, f13)`.
+- Touchpad gestures are patched in, not configured: niri hardcodes the finger counts, so `105-niri-gestures` builds a pinned patch set (niri-wm/niri#3771) that turns them into binds. Drop it when upstream ships it.
 - `overload_tap_timeout = 200` — measured with `tools/measure-taps.py`, not guessed.
 - Login is greetd + tuigreet. Fingerprint is free on Arch: `/etc/pam.d/greetd` includes `system-local-login`.
 - The greeter needs its own polkit rule for power buttons — it has no logind session, so polkit's defaults never match.
 - udiskie starts from the niri session, not a user unit: polkit's stock rules need an *active* session.
 - Typing goes through `wtype`, not `eitype`. Inter-key delay is voxtype's `type_delay_ms`, not the wrapper.
 - Font is `FantasqueSansM Nerd Font Mono`. `Mono` keeps icons on the cell grid.
+- Default sans-serif is `Inter`, with full hinting; Noto is the coverage fallback behind it.
 
 **Packages**
 
@@ -86,7 +90,7 @@ Already done by the install guide before the ladder runs:
 
 ## Open
 
-- The ladder has run end to end here, but the result has not been booted yet.
+- The ladder has run end to end here, and the result has been booted.
 - Printer config deliberately not ported.
 - No wallpaper until `files/wallpapers/` is populated.
 - No particular disk layout assumed — everything comes from `.env`.

@@ -1,0 +1,9 @@
+# Global gitignore (git's default excludes path when core.excludesFile is
+# unset: $XDG_CONFIG_HOME/git/ignore). Applies to every repository.
+
+# dsh-better-edit (hashline) scratch/state directory. A tool artifact that
+# appears in whatever repo a session edits files in. Never belongs in a repo.
+.dsh_better_edit/
+.dsh/
+.commandcode
+.cloudflare/
