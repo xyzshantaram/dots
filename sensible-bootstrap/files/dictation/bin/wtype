@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# wtype wrapper for the NPU dictation stack.
+#
+# voxtype types a transcript by shelling out to a binary named `wtype`. This
+# wrapper is installed ahead of the real binary on *voxtype's* PATH only (see
+# the unit's PATH override), so interactive shells never see it.
+#
+# For a text call it shows the dictation strip, waits for a decision, then:
+#   accept -> exec the real wtype with the ORIGINAL argv (delay flags and all,
+#             so nothing about voxtype's typing is reimplemented)
+#   cancel -> exit 0, so no text is typed and no clipboard fallback fires
+#
+# Control calls (auto-submit Enter, Shift+Enter newlines) carry a key/modifier
+# flag and are passed straight through, ungated. Those flags are wtype's own:
+# voxtype documents shift_enter_newlines as affecting only the wtype driver.
+#
+# Failure policy: if the strip cannot run or returns nothing usable, exit
+# non-zero. voxtype then treats this driver as failed and falls through its
+# driver_order, so the transcript is never lost.
+#
+# SELF-RECURSION: the real binary is referenced by absolute path. This script
+# shadows `wtype` on a PATH that puts its own directory first, so a bare
+# `wtype` here would re-enter this script forever.
+set -u
+
+REAL_WTYPE="${DICTATION_REAL_WTYPE:-/usr/bin/wtype}"
+STRIP="${DICTATION_STRIP:-$HOME/.local/share/dictation/bin/dictation-strip}"
+WAIT_MODIFIERS="${DICTATION_WAIT_MODIFIERS:-$HOME/.local/share/dictation/bin/dictation-wait-modifiers}"
+MOD_WAIT="${DICTATION_MOD_WAIT:-1.5}"
+# Settle after the strip closes, before typing. The strip is a layer-shell
+# surface destroyed moments before the keystrokes; the compositor has to tear
+# that surface down and hand focus back, and synthetic keys sent during that
+# transition can come out mangled (a spurious Shift, or a dropped release).
+SETTLE="${DICTATION_SETTLE:-0.2}"
+# Inter-key delay is NOT set here. voxtype's [output] type_delay_ms owns it,
+# because that setting covers every driver in driver_order, not just this one —
+# if typing falls through to dotool, a delay injected here would not come along.
+# The wrapper forwards voxtype's argv untouched, so whatever voxtype decides is
+# what wtype gets.
+TIMEOUT="${DICTATION_TIMEOUT:-15}"
+LOG="${DICTATION_LOG:-${XDG_RUNTIME_DIR:-/tmp}/dictation-strip.log}"
+
+log() { printf '%s %s\n' "$(date -Is)" "$*" >>"$LOG" 2>/dev/null || true; }
+
+# Type the text, but only once no modifier is physically held. voxtype already
+# waits for modifier release before it reaches the output driver, but the
+# strip sits inside that driver, so up to the whole strip timeout can pass
+# between voxtype's check and the keystrokes. If a modifier (the Copilot key
+# emits Meta+Shift) is down when typing starts, the text is typed modified and
+# the key-up can land mid-transcript, leaving Shift stuck afterwards.
+accept_and_type() {
+    # Let the strip's surface finish tearing down and focus settle before any
+    # synthetic key is sent.
+    if [[ "$SETTLE" != "0" ]]; then
+        sleep "$SETTLE"
+    fi
+
+    if [[ -x "$WAIT_MODIFIERS" ]]; then
+        if ! "$WAIT_MODIFIERS" "$MOD_WAIT"; then
+            log "modifier still held after ${MOD_WAIT}s; not typing (avoids mangled text)"
+            exit 1
+        fi
+    fi
+
+    log "type: argc=$n text=<${args[$((n - 1))]}>"
+    exec "$REAL_WTYPE" "${args[@]}"
+}
+
+n=$#
+
+if (( n == 0 )); then
+    exec "$REAL_WTYPE"
+fi
+
+args=("$@")
+
+# A control call carries a key/modifier flag; anything else is a text call.
+# wtype's short forms are the ones voxtype uses; the long forms are tolerated
+# in case a future driver spells them out.
+is_control=0
+for a in "${args[@]}"; do
+    case "$a" in
+        -k|--key|-M|--mod|-P|--press-mod|-p|--release-mod) is_control=1 ;;
+    esac
+done
+
+if (( is_control )); then
+    exec "$REAL_WTYPE" "${args[@]}"
+fi
+
+# voxtype always passes the transcript as the final argument.
+text="${args[$((n - 1))]}"
+
+# Record which modifiers are down as the strip opens, so a recurrence can be
+# told apart from one that only appears later.
+if [[ -x "$WAIT_MODIFIERS" ]]; then
+    log "strip: modifiers held at open = '$(DICTATION_DEBUG= "$WAIT_MODIFIERS" --report 2>/dev/null)'"
+fi
+
+json="$("$STRIP" --text "$text" --timeout "$TIMEOUT" 2>>"$LOG")"
+rc=$?
+
+if (( rc != 0 )) || [[ -z "$json" ]]; then
+    log "dictation-strip failed (rc=$rc); falling through to the next driver"
+    exit 1
+fi
+
+decision=""
+if command -v jaq >/dev/null 2>&1; then
+    decision="$(printf '%s' "$json" | jaq -r '.decision // empty' 2>/dev/null)"
+else
+    decision="$(printf '%s' "$json" \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin).get("decision",""))' 2>/dev/null)"
+fi
+
+case "$decision" in
+    accept)
+        accept_and_type
+        ;;
+    cancel)
+        exit 0
+        ;;
+    *)
+        log "unrecognised strip output: $json"
+        exit 1
+        ;;
+esac

@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Block until no modifier keys are physically held.
+
+voxtype waits for modifier release before typing, but that check runs before
+the output driver -- and the dictation strip sits inside the driver, so the
+check can be up to the whole strip timeout stale. If the strip is accepted
+while the Copilot key (Meta+Shift) is still down, the transcribed text is
+typed with those modifiers held, which triggers application/compositor
+keybindings and can leave Shift stuck.
+
+Run this immediately before synthesizing keystrokes to close that window.
+
+Exit 0 once no modifiers are held, 1 if they are still held after the timeout.
+If no input device is readable the wait cannot be enforced and it exits 0.
+"""
+import fcntl
+import glob
+import os
+import sys
+import time
+
+# EVIOCGKEY(len) -- the current key state bitmap of an evdev device.
+EVIOCGKEY = lambda n: 0x80000000 | (n << 16) | (ord("E") << 8) | 0x18
+BUF_LEN = 96  # (KEY_MAX + 1) / 8
+
+MODIFIERS = {
+    29: "LEFTCTRL", 97: "RIGHTCTRL",
+    42: "LEFTSHIFT", 54: "RIGHTSHIFT",
+    56: "LEFTALT", 100: "RIGHTALT",
+    125: "LEFTMETA", 126: "RIGHTMETA",
+}
+
+DEFAULT_TIMEOUT = 1.0
+POLL_INTERVAL = 0.01
+
+
+def open_devices():
+    fds = []
+    for path in sorted(glob.glob("/dev/input/event*")):
+        try:
+            fds.append(open(path, "rb", buffering=0))
+        except OSError:
+            continue
+    return fds
+
+
+def held_modifiers(fds):
+    held = set()
+    for fd in fds:
+        buf = bytearray(BUF_LEN)
+        try:
+            fcntl.ioctl(fd, EVIOCGKEY(BUF_LEN), buf, True)
+        except OSError:
+            continue  # device went away; skip it
+        for code in MODIFIERS:
+            if buf[code // 8] & (1 << (code % 8)):
+                held.add(code)
+    return held
+
+
+def main():
+    args = [a for a in sys.argv[1:] if a != "--report"]
+    report = "--report" in sys.argv[1:]
+    debug = os.environ.get("DICTATION_DEBUG")
+
+    fds = open_devices()
+    if not fds:
+        if report:
+            print("")
+        if debug:
+            print("wait-modifiers: no readable input devices; not waiting",
+                  file=sys.stderr)
+        return 0
+
+    if report:
+        held = held_modifiers(fds)
+        for fd in fds:
+            fd.close()
+        print(",".join(sorted(MODIFIERS[c] for c in held)))
+        return 1 if held else 0
+
+    timeout = float(args[0]) if args else DEFAULT_TIMEOUT
+    deadline = time.monotonic() + timeout
+    try:
+        while True:
+            held = held_modifiers(fds)
+            if not held:
+                return 0
+            if time.monotonic() >= deadline:
+                names = ",".join(sorted(MODIFIERS[c] for c in held))
+                print(f"wait-modifiers: still held after {timeout}s: {names}",
+                      file=sys.stderr)
+                return 1
+            time.sleep(POLL_INTERVAL)
+    finally:
+        for fd in fds:
+            fd.close()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

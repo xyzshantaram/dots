@@ -1,0 +1,38 @@
+# udiskie -- mount removable media when it is plugged in.
+#
+# udiskie is started by niri's spawn-at-startup line added in 114-udisks.ts, not
+# by a systemd unit. That is deliberate: ArchWiki, udisks, notes that udisks is
+# restricted by polkit and that its stock rules only let an *active* user
+# session mount without a password. A service started outside the graphical
+# session has no session to match, so the mount is refused and automounting
+# looks broken for no visible reason.
+#
+# udisksd itself is D-Bus activated, so udisks2.service is not enabled anywhere.
+#
+# Every key below was checked against `man udiskie` 2.7.0, the version in extra.
+# Options deliberately left unset, all documented there:
+#   password_cache  cache LUKS passphrases for N minutes; off by default
+#   file_manager    program to open a directory with, on insert
+#   menu            "flat" or "nested" for the systray menu
+
+program_options:
+  # No tray icon. udiskie's own default here is "auto", which hides the icon
+  # until a device appears; false is the explicit "never". niri has no
+  # status-notifier host, so a tray icon would wait for something that never
+  # comes, and notifications cover the same ground.
+  tray: false
+
+  # Mount on insert. Unmount with `udiskie-umount -a` or `udiskie-umount -d`
+  # to power the device down afterwards.
+  automount: true
+
+  # Mount and unmount notices go to swaync, which 110-niri.ts starts.
+  notify: true
+
+  # Deliberately not set: file_manager. Setting it (e.g. to `nautilus`) opens a
+  # window on every insert. Add the key here if you want that.
+
+notifications:
+  # Seconds. Applies to every notification whose own timeout is not overridden.
+  timeout: 5
+

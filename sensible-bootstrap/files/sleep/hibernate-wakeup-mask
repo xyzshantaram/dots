@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Disable the wake sources listed in /etc/hibernate-wakeup-mask.list.
+#
+# A wake event during hibernation power-off makes the kernel roll the
+# hibernation back, so the machine comes back up at once. Masking the listed
+# sources stops that.
+#
+# Writing a name to /proc/acpi/wakeup TOGGLES its state. Read the state first
+# and write only when the source is enabled, so this stays idempotent.
+#
+# Never fail. A broken mask must not block a hibernation.
+set -u
+
+WAKEUP=/proc/acpi/wakeup
+LIST=/etc/hibernate-wakeup-mask.list
+
+log() { printf 'hibernate-wakeup-mask: %s\n' "$*"; }
+
+mask_one() {
+    local name="$1" state
+    state=$(awk -v n="$name" '$1 == n {print $3}' "$WAKEUP" 2>/dev/null)
+    if [ -z "$state" ]; then
+        log "$name: not in the wakeup table, skip"
+        return 0
+    fi
+    case "$state" in
+        *enabled)
+            if printf '%s\n' "$name" > "$WAKEUP" 2>/dev/null; then
+                log "$name: enabled -> disabled"
+            else
+                log "$name: write failed, skip"
+            fi
+            ;;
+        *disabled)
+            log "$name: already disabled"
+            ;;
+        *)
+            log "$name: odd state '$state', skip"
+            ;;
+    esac
+}
+
+if [ ! -r "$LIST" ]; then
+    log "no list at $LIST, nothing to mask"
+    exit 0
+fi
+
+while read -r name; do
+    case "$name" in
+        ''|'#'*) continue ;;
+    esac
+    mask_one "$name"
+done < "$LIST"
+
+exit 0

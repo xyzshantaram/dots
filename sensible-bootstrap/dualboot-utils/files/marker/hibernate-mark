@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+# Mark, clear or show the hibernation state in the systemd-boot menu.
+#
+# Works from either installed system: it detects which OS is running and
+# touches only that OS's loader entries.
+#
+#   hibernate-mark mark     append " (HIBERNATED)" to this OS's entry titles
+#                           and make its entry the default for exactly one boot
+#   hibernate-mark clear    remove the suffix from every entry title
+#   hibernate-mark show     print every entry title and the detected OS
+#   hibernate-mark other    exit 1 when a DIFFERENT OS's entry is marked,
+#                           i.e. some other install owns a hibernation image.
+#                           Meant as a guard for mounting shared filesystems
+#                           read-write. Exit 0 when it cannot tell.
+#
+# ESP location differs by OS: Arch mounts it at /efi, Fedora at /boot/efi.
+# Both are tried, so the script needs no arguments from either side.
+#
+# systemd-boot renders titles from loader/entries/*.conf fresh on every boot,
+# so rewriting the title is enough to show state in the menu. It is a sign,
+# not a lock: nothing stops another entry being chosen, and choosing it starts
+# the other system's swap unit, which discards the hibernation image.
+set -u
+
+SUFFIX=" (HIBERNATED)"
+log() { printf 'hibernate-mark: %s\n' "$*"; }
+
+# --- detect the running OS -------------------------------------------------
+os_id() {
+    local id
+    id=$(sed -n 's/^ID=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -1)
+    case "$id" in
+        arch*|endeavouros|garuda|manjaro|cachyos) echo arch ;;
+        fedora) echo fedora ;;
+        *) echo "${id:-unknown}" ;;
+    esac
+}
+
+# --- find the ESP ----------------------------------------------------------
+find_esp() {
+    local candidate
+    for candidate in "${ESP:-}" /efi /boot/efi; do
+        [ -n "$candidate" ] || continue
+        [ -d "$candidate/loader/entries" ] || continue
+        mountpoint -q "$candidate" || continue
+        printf '%s\n' "$candidate"
+        return 0
+    done
+    return 1
+}
+
+# --- which entries belong to the running OS --------------------------------
+# Arch owns arch.conf and arch-known-good.conf. Fedora owns the chainload
+# entry we wrote. Anything else is left alone: on Fedora, grub is the real
+# bootloader for that OS, and its own menu is not ours to edit.
+glob_for() {
+    case "$1" in
+        arch)   printf '%s\n' "arch" ;;
+        fedora) printf '%s\n' "fedora" ;;
+        *)      printf '%s\n' "$1" ;;
+    esac
+}
+
+primary_entry() {
+    case "$1" in
+        arch)   printf '%s\n' "arch.conf" ;;
+        fedora) printf '%s\n' "fedora.conf" ;;
+        *)      printf '%s\n' "" ;;
+    esac
+}
+
+entries_for() {
+    local dir="$1" prefix="$2" f
+    for f in "$dir/$prefix"*.conf; do
+        [ -e "$f" ] || continue
+        printf '%s\n' "$f"
+    done
+}
+
+title_of() { sed -n 's/^title[[:space:]]*//p' "$1" | head -1; }
+
+# --- actions ---------------------------------------------------------------
+do_mark() {
+    local esp="$1" os="$2" prefix dir primary changed=0 f title
+    dir="$esp/loader/entries"
+    prefix=$(glob_for "$os")
+    primary=$(primary_entry "$os")
+
+    if [ -z "$primary" ]; then
+        log "unknown OS '$os'; nothing to mark"
+        return 1
+    fi
+
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        title=$(title_of "$f")
+        case "$title" in
+            *"$SUFFIX") continue ;;
+        esac
+        sed -i "s|^title[[:space:]].*|title   ${title}${SUFFIX}|" "$f"
+        log "marked $(basename "$f")"
+        changed=$((changed + 1))
+    done < <(entries_for "$dir" "$prefix")
+
+    if [ "$changed" -gt 0 ]; then
+        # One-shot, not persistent: a reboot into the other system should not
+        # leave this OS as the default forever.
+        if bootctl --esp-path="$esp" set-oneshot "$primary" >/dev/null 2>&1; then
+            log "one-shot default set to $primary"
+        else
+            log "bootctl set-oneshot failed; the menu default is unchanged"
+        fi
+    else
+        log "nothing to mark"
+    fi
+}
+
+do_clear() {
+    local esp="$1" dir f title base
+    dir="$esp/loader/entries"
+    for f in "$dir"/*.conf; do
+        [ -e "$f" ] || continue
+        title=$(title_of "$f")
+        case "$title" in
+            *"$SUFFIX") ;;
+            *) continue ;;
+        esac
+        base="${title%"$SUFFIX"}"
+        sed -i "s|^title[[:space:]].*|title   ${base}|" "$f"
+        log "cleared $(basename "$f")"
+    done
+}
+
+do_show() {
+    local esp="$1" os="$2" dir f
+    dir="$esp/loader/entries"
+    log "os=$os esp=$esp"
+    for f in "$dir"/*.conf; do
+        [ -e "$f" ] || continue
+        printf '%-28s %s\n' "$(basename "$f")" "$(title_of "$f")"
+    done
+}
+
+# Guard for "may I write to a filesystem the other OS owns?"
+#
+# A marked entry belonging to someone else means that install hibernated and
+# left an image behind; thawing onto a filesystem another kernel wrote to is
+# how a home directory is lost. This is the check that blocks that.
+#
+# This OS's own entries are ignored. If we are running, we did not hibernate; a
+# stale mark on our side is our own problem and says nothing about the drawer.
+#
+# The contract is deliberately "exit 0 when it cannot tell". See main.
+do_other() {
+    local esp="$1" os="$2"
+    local dir="$esp/loader/entries"
+    local prefix f title blocked=0
+    prefix=$(glob_for "$os")
+
+    for f in "$dir"/*.conf; do
+        [ -e "$f" ] || continue
+        title=$(title_of "$f")
+        case "$title" in
+            *"$SUFFIX") ;;
+            *) continue ;;
+        esac
+        # Skip our own: entries_for-style prefix match on the basename.
+        case "$(basename "$f")" in
+            "$prefix"*) continue ;;
+        esac
+        log "$(basename "$f") is marked '${SUFFIX# }': that OS may hold an image"
+        blocked=1
+    done
+
+    if [ "$blocked" -eq 1 ]; then
+        log "refusing: another OS appears to be hibernated"
+        return 1
+    fi
+    return 0
+}
+
+# --- main ------------------------------------------------------------------
+os=$(os_id)
+
+case "${1:-}" in
+    other)
+        # Refusing to mount read-write every time the ESP is unavailable would
+        # be worse than the risk being guarded against, so an indeterminate
+        # answer allows the operation and says so loudly. Only a positive
+        # detection blocks. A consequence worth knowing: if that OS was powered
+        # off mid-hibernation rather than resumed, its mark survives and this
+        # refuses a write window that would in fact have been safe.
+        if esp=$(find_esp); then
+            do_other "$esp" "$os"
+        else
+            log "no mounted ESP (tried ${ESP:-unset}, /efi, /boot/efi)"
+            log "cannot check for another OS's hibernation image; allowing"
+            exit 0
+        fi
+        ;;
+    mark)
+        esp=$(find_esp) || {
+            log "no mounted ESP with loader/entries found (tried ${ESP:-unset}, /efi, /boot/efi)"
+            exit 1
+        }
+        do_mark "$esp" "$os" ;;
+    clear)
+        esp=$(find_esp) || {
+            log "no mounted ESP with loader/entries found (tried ${ESP:-unset}, /efi, /boot/efi)"
+            exit 1
+        }
+        do_clear "$esp" ;;
+    show)
+        esp=$(find_esp) || {
+            log "no mounted ESP with loader/entries found (tried ${ESP:-unset}, /efi, /boot/efi)"
+            exit 1
+        }
+        do_show "$esp" "$os" ;;
+    *)
+        printf 'usage: hibernate-mark mark|clear|show|other\n' >&2
+        exit 2
+        ;;
+esac

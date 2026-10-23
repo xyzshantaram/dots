@@ -1,0 +1,58 @@
+#!/usr/bin/bash
+# dictation — status bar widget for the NPU dictation stack.
+# Reports the live voxtype state, and warns when the FastFlowLM Whisper
+# server (flm-whisper.service) isn't listening.
+#
+#   💤 OFF   voxtype daemon not running (dictation.target stopped)
+#   🎙️ OK    daemon up, FLM up, waiting for the Copilot key
+#   🔴 REC   capturing microphone
+#   ⏳ PRO   transcribing on the NPU
+#   ⚠️ DWN   voxtype up but the Whisper server isn't reachable
+#   ❓ <state>  anything unexpected
+#
+# Emoji + three-letter code, mirroring the powermode widget's "icon value" style.
+#
+# KDE "Command Output" plasmoid:
+#   Command:       dictation
+#   Click action:  systemctl --user start/stop dictation.target   (optional)
+#   Poll interval: 2s
+set -euo pipefail
+
+VOX="$HOME/.local/bin/voxtype"
+FLM_PORT=52625
+
+# voxtype prints "stopped" when the daemon isn't running, and exits 0 either way.
+STATE=$("$VOX" status 2>/dev/null || true)
+
+case "$STATE" in
+    stopped|"")
+        echo "💤 OFF"
+        exit 0
+        ;;
+    recording)
+        echo "🔴 REC"
+        exit 0
+        ;;
+    transcribing)
+        echo "⏳ PRO"
+        exit 0
+        ;;
+    idle)
+        : # fall through to the FLM health check
+        ;;
+    *)
+        echo "❓ $STATE"
+        exit 0
+        ;;
+esac
+
+# FLM is "offline" if nothing is accepting connections on its API port. This is
+# the real source of truth — it also covers flm started by hand, outside systemd.
+# No pipes here, so `set -o pipefail` can't trip on SIGPIPE.
+LISTENERS=$(ss -ltnH 2>/dev/null || true)
+if [[ "$LISTENERS" != *"127.0.0.1:$FLM_PORT"* ]]; then
+    echo "⚠️ DWN"
+    exit 0
+fi
+
+echo "🎙️ OK"

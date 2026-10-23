@@ -1,0 +1,11 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = usr/lib/modules/*/vmlinuz
+
+[Action]
+Description = Copying Arch kernel and initramfs to the ESP...
+When = PostTransaction
+Exec = /usr/local/bin/esp-sync
+NeedsTargets = false

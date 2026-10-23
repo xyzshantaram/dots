@@ -1,0 +1,19 @@
+[Unit]
+Description=FastFlowLM Whisper NPU transcription server (flm serve whisper-v3:turbo)
+Documentation=https://fastflowlm.com/docs/instructions
+PartOf=dictation.target
+
+[Service]
+Type=simple
+# --asr (-a) 1 is required: without it flm silently loads a text LLM instead
+# of the Whisper model and /v1/audio/transcriptions returns null.
+# fastflowlm's package places the binary in /usr/bin on Arch.
+ExecStart=/usr/bin/flm serve -a 1 whisper-v3:turbo
+Restart=on-failure
+RestartSec=2
+KillMode=mixed
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=dictation.target

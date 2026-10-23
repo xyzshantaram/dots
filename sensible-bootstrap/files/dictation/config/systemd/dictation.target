@@ -1,0 +1,6 @@
+[Unit]
+Description=Voice dictation (FLM NPU Whisper server + Voxtype daemon)
+Wants=flm-whisper.service voxtype.service
+
+[Install]
+WantedBy=default.target

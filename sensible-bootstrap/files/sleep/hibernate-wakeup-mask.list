@@ -1,0 +1,21 @@
+# Wake sources masked before every hibernation. One name per line.
+# These fire wake events during power-off and roll the hibernation back.
+# The machine then comes back up at once, or wedges on the rollback path.
+#
+# LID is masked on purpose. With LID enabled, opening the lid during the image
+# write aborts the hibernation. Masked, the write always completes and the
+# machine powers off. Wake it with the power button.
+#
+# SLPB stays enabled. Never add it here.
+XHC0
+XHC1
+XHC3
+XHC4
+GPP0
+GPP1
+GPP3
+GPP5
+GPP6
+NHI0
+NHI1
+LID

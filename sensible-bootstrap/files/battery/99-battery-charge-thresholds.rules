@@ -1,0 +1,5 @@
+# Re-apply the ThinkPad charge thresholds when the AC adapter changes state.
+# Some ThinkPads drop the thresholds on AC plug/unplug, which is exactly the
+# "starts charging to 100% the moment I plug in" symptom.
+ACTION=="change", SUBSYSTEM=="power_supply", KERNEL=="AC", \
+    RUN+="/usr/local/bin/battery-charge-thresholds"

@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# esp-sync — keep the ESP copies of the Arch kernel and initramfs current.
+#
+#   esp-sync            install the current /boot images, rotating the old pair
+#   esp-sync --status   show what is installed and what would change
+#
+# Layout on the ESP:
+#
+#   /EFI/arch/current/{vmlinuz,initramfs}-<kernel>
+#   /EFI/arch/previous/{vmlinuz,initramfs}-<kernel>
+#
+# arch.conf boots `current`; arch-known-good.conf boots `previous`, which is
+# the kernel that was running before the last update. That is the pair to fall
+# back to when a new kernel misbehaves. On the first sync `previous` is seeded
+# from `current` so the fallback entry resolves from the start.
+#
+# Run by /usr/share/libalpm/hooks/99-esp-kernel-sync.hook after mkinitcpio has
+# regenerated the initramfs.
+set -euo pipefail
+
+KERNEL="${KERNEL:-linux-zen}"
+ESP="${ESP:-/efi}"
+SRC_DIR="${SRC_DIR:-/boot}"
+
+CURRENT="$ESP/EFI/arch/current"
+PREVIOUS="$ESP/EFI/arch/previous"
+
+VMLINUZ="vmlinuz-$KERNEL"
+INITRAMFS="initramfs-$KERNEL.img"
+
+log() { printf 'esp-sync: %s\n' "$*"; }
+
+die() { printf 'esp-sync: error: %s\n' "$*" >&2; exit 1; }
+
+[ -f "$SRC_DIR/$VMLINUZ" ] || die "no $SRC_DIR/$VMLINUZ"
+[ -f "$SRC_DIR/$INITRAMFS" ] || die "no $SRC_DIR/$INITRAMFS"
+mountpoint -q "$ESP" || die "$ESP is not mounted"
+
+if [ "${1:-}" = "--status" ]; then
+    for dir in current previous; do
+        target="$ESP/EFI/arch/$dir"
+        if [ -d "$target" ]; then
+            log "$dir: $(ls "$target" | tr '\n' ' ')"
+        else
+            log "$dir: empty"
+        fi
+    done
+    if cmp -s "$SRC_DIR/$VMLINUZ" "$CURRENT/$VMLINUZ" 2>/dev/null; then
+        log "current matches /boot; nothing to do"
+    else
+        log "current differs from /boot; a sync would rotate and copy"
+    fi
+    exit 0
+fi
+
+install -d "$CURRENT" "$PREVIOUS"
+
+# previous has to hold a real pair. arch-known-good.conf points at it, and
+# systemd-boot assembles its menu from loader/entries without checking that the
+# files exist - it lists such an entry and only fails when someone picks it, so
+# an empty previous is a broken fallback sitting in the menu, discovered at the
+# worst possible moment. Seed it from current when there is one, otherwise from
+# the pair about to be installed: on a fresh install both are the same kernel,
+# and the first update replaces the seed with a genuinely older one.
+if [ ! -f "$PREVIOUS/$VMLINUZ" ] || [ ! -f "$PREVIOUS/$INITRAMFS" ]; then
+    seed="$CURRENT"
+    [ -f "$CURRENT/$VMLINUZ" ] || seed="$SRC_DIR"
+    cp -f "$seed/$VMLINUZ" "$PREVIOUS/$VMLINUZ"
+    cp -f "$seed/$INITRAMFS" "$PREVIOUS/$INITRAMFS"
+    log "previous <- seeded from $seed"
+fi
+
+if cmp -s "$SRC_DIR/$VMLINUZ" "$CURRENT/$VMLINUZ" 2>/dev/null &&
+   cmp -s "$SRC_DIR/$INITRAMFS" "$CURRENT/$INITRAMFS" 2>/dev/null; then
+    log "already up to date ($(cat "/usr/lib/modules/$KERNEL/pkgbase" 2>/dev/null || echo "$KERNEL"))"
+    exit 0
+fi
+
+# Rotate: the pair that was current becomes the known-good fallback.
+if [ -f "$CURRENT/$VMLINUZ" ]; then
+    cp -f "$CURRENT/$VMLINUZ" "$PREVIOUS/$VMLINUZ"
+    [ -f "$CURRENT/$INITRAMFS" ] && cp -f "$CURRENT/$INITRAMFS" "$PREVIOUS/$INITRAMFS"
+    log "previous <- the kernel that was in current"
+fi
+
+install -m 0644 "$SRC_DIR/$VMLINUZ" "$CURRENT/$VMLINUZ"
+install -m 0600 "$SRC_DIR/$INITRAMFS" "$CURRENT/$INITRAMFS"
+# Microcode is embedded in the initramfs by the `microcode` hook, so there is no
+# amd-ucode.img to carry alongside it. See 150-kernel-sync.ts.
+sync
+log "current <- $SRC_DIR ($(uname -r 2>/dev/null || echo "running kernel"))"

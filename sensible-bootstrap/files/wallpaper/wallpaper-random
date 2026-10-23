@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Pick a random wallpaper and hand it to swaybg.
+#
+# Started by niri via spawn-at-startup, so this process stays in the foreground:
+# `exec swaybg` replaces this shell and keeps the background alive for the whole
+# session. Anything that returns early therefore means "no background", which is
+# why every exit below is deliberate and logged to stderr.
+#
+# Never fail loudly. A machine with no wallpapers should still get a session.
+set -u
+
+DIR="${WALLPAPER_DIR:-$HOME/wallpapers}"
+log() { printf 'wallpaper-random: %s\n' "$*" >&2; }
+
+[ -d "$DIR" ] || { log "$DIR does not exist; no wallpaper set"; exit 0; }
+
+# Read into an array so paths with spaces survive. Newlines in filenames would
+# still break this; a wallpaper named with one is not worth the complexity.
+mapfile -t FILES < <(
+    find "$DIR" -maxdepth 1 -type f \
+        \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \
+        -o -iname '*.webp' -o -iname '*.gif' -o -iname '*.bmp' \) 2>/dev/null
+)
+
+if [ "${#FILES[@]}" -eq 0 ]; then
+    log "$DIR holds no images; no wallpaper set"
+    exit 0
+fi
+
+if ! command -v swaybg >/dev/null 2>&1; then
+    log "swaybg is not installed; no wallpaper set"
+    exit 0
+fi
+
+# RANDOM rather than shuf: no dependency, and this does not need to be
+# uniform enough to care about.
+pick="${FILES[RANDOM % ${#FILES[@]}]}"
+log "setting $(basename "$pick") (${#FILES[@]} available)"
+
+# exec: swaybg becomes this process, so niri's spawn keeps it alive. -m fill
+# scales to cover without distorting aspect ratio.
+exec swaybg -i "$pick" -m fill

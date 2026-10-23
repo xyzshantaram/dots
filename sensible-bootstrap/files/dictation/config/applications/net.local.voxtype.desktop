@@ -1,0 +1,7 @@
+[Desktop Entry]
+Exec=/home/sid/.local/bin/voxtype record toggle
+Name=Start recording with voxtype
+NoDisplay=true
+StartupNotify=false
+Type=Application
+X-KDE-GlobalAccel-CommandShortcut=true

@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Hibernate on idle, with a different timeout on battery and on AC.
+#
+# swayidle cannot read the power source, so it fires at the shorter interval
+# and this script decides whether to act. Run from swayidle with the limit
+# that applies:
+#
+#   idle-hibernate battery     hibernate when on battery
+#   idle-hibernate ac          hibernate when on AC
+#
+# It locks first so the machine is not resumable into an unlocked session.
+set -u
+
+MODE="${1:-any}"
+ONLINE=/sys/class/power_supply/AC/online
+
+log() { printf 'idle-hibernate: %s\n' "$*"; }
+
+# The AC adapter name varies; fall back to looking for any mains supply.
+if [ ! -r "$ONLINE" ]; then
+    ONLINE=""
+    for supply in /sys/class/power_supply/*; do
+        [ -r "$supply/online" ] || continue
+        ONLINE="$supply/online"
+        break
+    done
+fi
+
+if [ -z "$ONLINE" ]; then
+    log "no AC adapter reported; treating as battery"
+    on_ac=0
+else
+    on_ac="$(cat "$ONLINE" 2>/dev/null || echo 0)"
+fi
+
+case "$MODE" in
+    battery)
+        if [ "$on_ac" = "1" ]; then
+            log "on AC, not hibernating (battery timer)"
+            exit 0
+        fi
+        ;;
+    ac)
+        if [ "$on_ac" != "1" ]; then
+            log "on battery, not hibernating (AC timer)"
+            exit 0
+        fi
+        ;;
+esac
+
+# Lock before sleeping. A failure here must not stop the hibernation.
+loginctl lock-session >/dev/null 2>&1 || true
+
+log "hibernating (mode=$MODE, ac=$on_ac)"
+systemctl hibernate

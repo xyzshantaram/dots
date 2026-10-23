@@ -1,0 +1,26 @@
+[Unit]
+Description=Voxtype voice-to-text daemon (Copilot-key toggle, FLM remote Whisper)
+After=flm-whisper.service graphical-session.target
+Wants=flm-whisper.service
+PartOf=dictation.target
+
+[Service]
+Type=simple
+# Voxtype types by shelling out to a binary named `wtype`. The dictation strip
+# installs a wrapper of that name which previews the transcript before typing
+# it. Only voxtype gets that shadow: prepending the private bin directory to
+# THIS unit's PATH keeps the wrapper out of interactive shells.
+Environment=PATH=%h/.local/share/dictation/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Point the wrapper at the genuine wtype and at the strip. wtype's path is
+# absolute because the wrapper shadows the name on this PATH — a bare `wtype`
+# inside it would re-enter the wrapper.
+Environment=DICTATION_REAL_WTYPE=/usr/bin/wtype
+Environment=DICTATION_STRIP=%h/.local/share/dictation/bin/dictation-strip
+# The strip is a layer-shell surface; force Wayland even though DISPLAY is set.
+Environment=QT_QPA_PLATFORM=wayland
+ExecStart=%h/.local/bin/voxtype daemon
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=dictation.target

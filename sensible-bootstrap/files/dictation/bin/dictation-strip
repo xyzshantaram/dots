@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+"""dictation-strip — show a transcript before it is typed.
+
+Invoked by the `eitype` wrapper with the transcript as an argument. Draws a
+translucent, full-width layer-shell strip near the bottom of the active screen
+and waits for a decision:
+
+  * Accept  — type the text (wrapper) or, after the countdown expires, accept
+  * Cancel  — discard
+  * Pause   — freeze the countdown until resumed
+
+The chosen decision is printed to stdout as a single JSON object and the
+process exits 0. Anything that goes wrong is reported on stderr and exits
+non-zero, which the wrapper turns into a voxtype clipboard fallback.
+
+The "about to type into" line is fed live from a report-only KWin script
+(kwin/dictation-target.js) that is loaded for the lifetime of this process.
+"""
+import argparse
+import json
+import os
+import signal
+import socket
+import sys
+import time
+
+# The overlay is a wlr-layer-shell surface, so it must be a Wayland client.
+# DISPLAY is also set in this session, which would otherwise make Qt pick
+# XWayland and silently lose the layer-shell surface.
+os.environ.setdefault("QT_QPA_PLATFORM", "wayland")
+
+
+def parse_args(argv):
+    p = argparse.ArgumentParser(prog="dictation-strip")
+    p.add_argument("--text", required=True, help="transcript to show")
+    p.add_argument("--timeout", type=float, default=15.0,
+                   help="seconds before auto-accept (default 15)")
+    p.add_argument("--band-cm", type=float, default=2.0,
+                   help="max height of the text band, in centimetres")
+    p.add_argument("--bottom-frac", type=float, default=0.175,
+                   help="bottom edge position as a fraction of screen height")
+    return p.parse_args(argv)
+
+
+def repo_path(*parts):
+    here = os.path.dirname(os.path.realpath(__file__))
+    return os.path.join(here, *parts)
+
+
+def main(argv=None):
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+
+    from PySide6.QtCore import QObject, QSocketNotifier, Qt, Signal, Slot
+    from PySide6.QtGui import QGuiApplication
+    from PySide6.QtQml import QQmlApplicationEngine
+    from PySide6.QtDBus import QDBusConnection, QDBusInterface
+
+    app = QGuiApplication(sys.argv[:1])
+    app.setApplicationName("dictation-strip")
+    # The layer-shell surface's app id comes from the desktop file name, not
+    # applicationName; without this the compositor sees the interpreter
+    # ("python3.14"), which makes the window unidentifiable to window rules.
+    app.setDesktopFileName("dictation-strip")
+
+    # ---- geometry: physically-correct text band and bottom position --------
+    screen = app.primaryScreen()
+    geo = screen.geometry()
+    phys = screen.physicalSize()
+    if phys.height() > 0:
+        band_px = round(geo.height() * (args.band_cm * 10.0 / phys.height()))
+    else:
+        band_px = round(geo.height() * 0.107)  # ~2cm on a typical laptop panel
+    bottom_margin = round(geo.height() * args.bottom_frac)
+    side_pad = 18
+    if os.environ.get("DICTATION_DEBUG"):
+        print(f"geom: screen={geo.width()}x{geo.height()} phys={phys.width()}x{phys.height()}mm "
+              f"band_px={band_px} bottom_margin={bottom_margin}", file=sys.stderr)
+
+    # ---- single instance: dismiss any strip already showing ----------------
+    runtime = os.environ.get("XDG_RUNTIME_DIR") or "/tmp"
+    pidfile = os.path.join(runtime, "dictation-strip.pid")
+    _dismiss_previous(pidfile)
+
+    class Controller(QObject):
+        targetChanged = Signal(str, str)
+
+        def __init__(self):
+            super().__init__()
+            self._done = False
+
+        @Slot(str, str)
+        def setTarget(self, app_name, title):
+            # Called from the KWin script via callDBus.
+            if os.environ.get("DICTATION_DEBUG"):
+                print(f"target: app={app_name!r} title={title!r}", file=sys.stderr)
+            self.targetChanged.emit(app_name or "", title or "")
+
+        @Slot(str)
+        def finish(self, decision):
+            if self._done:
+                return
+            self._done = True
+            _unload_kwin()
+            _remove_pidfile(pidfile)
+            sys.stdout.write(json.dumps({"decision": decision}) + "\n")
+            sys.stdout.flush()
+            app.exit(0)
+
+    ctrl = Controller()
+
+    # ---- D-Bus service the KWin script calls -------------------------------
+    bus = QDBusConnection.sessionBus()
+    if not bus.registerService("org.voxtype.DictationStrip"):
+        print("warning: could not own org.voxtype.DictationStrip", file=sys.stderr)
+    bus.registerObject("/Strip", "org.voxtype.DictationStrip", ctrl,
+                       QDBusConnection.ExportAllSlots)
+
+    # ---- SIGTERM/SIGINT -> cancel (self-pipe keeps Qt happy) ---------------
+    rsock, wsock = socket.socketpair()
+    os.set_blocking(rsock.fileno(), False)
+    os.set_blocking(wsock.fileno(), False)
+    signal.set_wakeup_fd(wsock.fileno())
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: None)
+
+    notifier = QSocketNotifier(rsock.fileno(), QSocketNotifier.Type.Read)
+
+    def _on_signal():
+        try:
+            rsock.recv(4096)
+        except OSError:
+            pass
+        ctrl.finish("cancel")
+
+    notifier.activated.connect(_on_signal)
+
+    # ---- load QML ----------------------------------------------------------
+    engine = QQmlApplicationEngine()
+    ctx = engine.rootContext()
+    ctx.setContextProperty("ctrl", ctrl)
+    ctx.setContextProperty("stripText", args.text)
+    ctx.setContextProperty("stripTimeoutMs", int(args.timeout * 1000))
+    ctx.setContextProperty("bandPx", int(band_px))
+    ctx.setContextProperty("bottomMargin", int(bottom_margin))
+    ctx.setContextProperty("sidePad", int(side_pad))
+    ctx.setContextProperty("debugLog", bool(os.environ.get("DICTATION_DEBUG")))
+
+    engine.load(repo_path("..", "qml", "DictationStrip.qml"))
+    if not engine.rootObjects():
+        print("error: could not load DictationStrip.qml", file=sys.stderr)
+        return 1
+
+    _write_pidfile(pidfile)
+    _load_kwin()
+
+    if os.environ.get("DICTATION_DEBUG"):
+        from PySide6.QtCore import QTimer
+        root = engine.rootObjects()[0]
+
+        def _dump():
+            print(f"strip: x={root.x()} y={root.y()} w={root.width()} h={root.height()} "
+                  f"screen_h={geo.height()}", file=sys.stderr)
+            print(f"strip: {root.property('debugInfo')}", file=sys.stderr)
+            print(f"fit: bandPx={band_px} textH={root.property('textH')} "
+                  f"chosenSize={root.property('chosenSize')} "
+                  f"lines={root.property('lines')}", file=sys.stderr)
+
+        QTimer.singleShot(900, _dump)
+
+    rc = app.exec()
+    _remove_pidfile(pidfile)
+    return rc
+
+
+def _dismiss_previous(pidfile):
+    try:
+        with open(pidfile) as fh:
+            pid = int(fh.read().strip())
+    except (OSError, ValueError):
+        return
+    if pid <= 0 or pid == os.getpid():
+        return
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        return
+    for _ in range(20):  # give it up to ~1s to finish cancelling
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            return
+        time.sleep(0.05)
+
+
+def _write_pidfile(pidfile):
+    try:
+        with open(pidfile, "w") as fh:
+            fh.write(str(os.getpid()))
+    except OSError:
+        pass
+
+
+def _remove_pidfile(pidfile):
+    try:
+        with open(pidfile) as fh:
+            if fh.read().strip() == str(os.getpid()):
+                os.unlink(pidfile)
+    except OSError:
+        pass
+
+
+def _kwin_iface():
+    from PySide6.QtDBus import QDBusConnection, QDBusInterface
+    return QDBusInterface("org.kde.KWin", "/Scripting", "org.kde.kwin.Scripting",
+                          QDBusConnection.sessionBus())
+
+
+def _load_kwin():
+    try:
+        script = repo_path("..", "kwin", "dictation-target.js")
+        iface = _kwin_iface()
+        iface.call("loadScript", script, "dictation_target")
+        iface.call("start")
+    except Exception as exc:  # best effort: the title simply will not update
+        print(f"warning: could not load KWin script: {exc}", file=sys.stderr)
+
+
+def _unload_kwin():
+    try:
+        _kwin_iface().call("unloadScript", "dictation_target")
+    except Exception:
+        pass
+
+
+if __name__ == "__main__":
+    sys.exit(main())

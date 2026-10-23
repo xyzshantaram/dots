@@ -1,0 +1,10 @@
+[Unit]
+Description=Apply ThinkPad battery charge thresholds (65/85)
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/battery-charge-thresholds
+
+[Install]
+WantedBy=multi-user.target

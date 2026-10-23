@@ -1,0 +1,5 @@
+# The directory is committed; the wallpapers in it are personal, so they are
+# not. Drop files here freely — they stay on your machine.
+*
+!.gitignore
+!README.md

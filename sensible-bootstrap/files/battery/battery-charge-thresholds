@@ -1,0 +1,31 @@
+#!/usr/bin/bash
+# battery-charge-thresholds - apply and re-apply the ThinkPad charge thresholds.
+#
+# The ThinkPad EC charge thresholds are volatile and nothing on this system
+# re-applies them, so they fall back to 0/100 and the battery charges to 100%
+# the moment AC is connected. Run at boot (battery-charge-thresholds.service)
+# and on AC changes (99-battery-charge-thresholds.rules).
+#
+# Defaults: start charging only below 65%, stop at 85%.
+# Override, e.g.:  START=75 END=90 battery-charge-thresholds
+set -euo pipefail
+
+BAT="${BAT:-BAT0}"
+START="${START:-65}"
+END="${END:-85}"
+BASE="/sys/class/power_supply/${BAT}"
+
+[ -d "$BASE" ] || exit 0
+
+write() {
+    local file="$1" value="$2"
+    [ -e "$file" ] || return 0
+    printf '%s\n' "$value" > "$file" 2>/dev/null || true
+}
+
+# power_supply class interface (canonical)
+write "$BASE/charge_control_start_threshold" "$START"
+write "$BASE/charge_control_end_threshold"   "$END"
+# thinkpad_acpi legacy aliases (harmless if the same registers)
+write "$BASE/charge_start_threshold"         "$START"
+write "$BASE/charge_stop_threshold"          "$END"

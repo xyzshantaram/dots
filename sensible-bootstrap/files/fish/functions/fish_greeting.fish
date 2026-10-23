@@ -1,0 +1,2 @@
+fortune | cowsay -rC
+echo

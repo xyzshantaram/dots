@@ -1,0 +1,41 @@
+# Voxtype configuration for the local FastFlowLM (FLM) NPU Whisper server.
+# Transcription is done remotely by `flm serve -a 1 whisper-v3:turbo`;
+# Voxtype only captures microphone audio and types the returned text.
+
+engine = "whisper"
+
+[hotkey]
+# Recording is driven by a niri bind that runs `voxtype record toggle`
+# (the Copilot key, mapped through keyd to Pause). The built-in evdev hotkey
+# stays off so voxtype does not grab keyboard devices.
+enabled = false
+
+[osd]
+# The preview strip is the OSD; no separate GTK4 frontend is installed.
+enabled = false
+
+[whisper]
+mode = "remote"
+remote_endpoint = "http://127.0.0.1:52625"
+remote_model = "whisper-v3:turbo"
+remote_timeout_secs = 120
+
+[output]
+# wtype is voxtype's own preferred Wayland driver, and the one this ladder
+# shadows with a wrapper on voxtype's PATH (see bin/wtype) so the preview strip
+# sits in the typing path. dotool stays behind it as a fallback: it is
+# uinput-based, so it also covers the non-US layout case wtype cannot.
+#
+# eitype is deliberately absent. It is voxtype's libei driver, added for
+# GNOME and KDE, whose compositors do not speak the virtual-keyboard protocol
+# wtype needs. niri does speak it, so eitype has nothing to offer here and
+# would only have added an AUR dependency.
+#
+# type_delay_ms is the only delay knob. wtype defaults to 0, which types a whole
+# sentence in a fraction of a second; the compositor can fall behind and
+# mis-apply modifier state (the "OkAy" / stuck-Shift bug). It lives here rather
+# than in the wrapper because it covers every driver in driver_order — the
+# dotool fallback would otherwise get no delay at all.
+mode = "type"
+driver_order = ["wtype", "dotool", "ydotool", "clipboard"]
+type_delay_ms = 3
