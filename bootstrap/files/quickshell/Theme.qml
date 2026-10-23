@@ -68,11 +68,27 @@ Singleton {
     // Nerd-font glyphs get their own, larger token. Their ink only fills part
     // of the em box, so a glyph set to iconSize draws visibly smaller than an
     // image set to it. This is the same apparent size, not a bigger one.
-    readonly property int glyphSize: 22
+    //
+    // Measured against the pill: at 24 the ink is about 18px across inside a
+    // 30px pill, which is why this can be larger than the text and still fit.
+    readonly property int glyphSize: 24
 
-    // Room below the strip for the tooltip. A two-line tooltip plus the gap
-    // between it and the bar, with a little to spare.
+    // Some nerd-font glyphs are drawn asymmetrically inside their own box. The
+    // puzzle outline measures exactly two-thirds of an advance wide, flush on
+    // both sides, and still reads lopsided because its tab is on one side — no
+    // amount of layout will centre a shape like that. This nudges the ink
+    // without moving the pill around it.
+    //
+    // 3 by eye. The ink draws a few pixels left of where its advance says it
+    // should be, which is the glyph's own business and not the layout's.
+    readonly property int glyphOffsetX: 3
+
+    // Room below the strip for the tooltip, and for the tray's dropdown, which
+    // is taller. One number serves both: the window is as tall as the tallest
+    // thing that might be drawn in it. Roughly six tray entries and their
+    // padding.
     readonly property int tooltipHeadroom: 44
+    readonly property int menuHeadroom: 200
 
     // --- geometry ---------------------------------------------------------
     // Gaps are 8 in niri's layout; the bar uses the same number so its margin
