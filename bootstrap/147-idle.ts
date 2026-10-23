@@ -23,6 +23,7 @@
 import process from "node:process";
 import {
   ARCH_USER, inArchSoft, main, needMount, readArch, removeArch, say, writeArch,
+  writeUserFile,
 } from "./lib.ts";
 
 const NIRI = `/home/${ARCH_USER}/.config/niri/config.kdl`;
@@ -51,7 +52,7 @@ async function up(): Promise<void> {
   if (config.split("\n").some((l) => l.trim() === SPAWN)) {
     say("niri already starts swayidle");
   } else {
-    await writeArch(NIRI, `${config}${config.endsWith("\n") ? "" : "\n"}${SPAWN}\n`);
+    await writeUserFile(NIRI, `${config}${config.endsWith("\n") ? "" : "\n"}${SPAWN}\n`);
     say("added the swayidle line to the niri config");
   }
 
@@ -71,7 +72,7 @@ async function down(): Promise<void> {
   const config = await readArch(NIRI);
   if (config !== null) {
     const kept = config.split("\n").filter((l) => l.trim() !== SPAWN);
-    await writeArch(NIRI, kept.join("\n"));
+    await writeUserFile(NIRI, kept.join("\n"));
     say("removed the swayidle line from the niri config");
   }
 

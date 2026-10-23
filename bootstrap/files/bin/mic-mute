@@ -15,16 +15,20 @@
 # The switch is set to *match* PipeWire rather than toggled in parallel, so the
 # two cannot drift apart on a double press or a race.
 #
-# Card 1 ("Generic_1") is the one the base ThinkPad LED quirk binds:
-# /sys/class/sound/ctl-led/mic/card1/list reports numid 7, and that card's
-# codec exposes exactly one capture switch, "Capture Switch". Needs
-# alsa-utils for amixer (installed by 40-packages.ts).
+# Card 1 ("Generic_1") is the one the ThinkPad LED quirk binds:
+# /sys/class/sound/ctl-led/mic/card1/list reports numid 7, which is the raw
+# control `Capture Switch`. amixer's *simple* control for that same thing is
+# named `Capture` — `sset 'Capture Switch'` fails with "Unable to find simple
+# control", because the raw name is only usable through cset. So `Capture`.
+#
+# Needs alsa-utils for amixer (installed by 40-packages.ts). Writes to
+# /dev/snd/controlC1 work through the logind ACL, without the `audio` group.
 set -u
 
 wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
 
 state="$(wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null || echo)"
 case "$state" in
-    *MUTED*) amixer -c 1 sset 'Capture Switch' nocap >/dev/null 2>&1 || true ;;
-    *)       amixer -c 1 sset 'Capture Switch' cap   >/dev/null 2>&1 || true ;;
+    *MUTED*) amixer -c 1 sset 'Capture' nocap >/dev/null 2>&1 || true ;;
+    *)       amixer -c 1 sset 'Capture' cap   >/dev/null 2>&1 || true ;;
 esac

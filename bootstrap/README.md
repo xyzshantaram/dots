@@ -109,6 +109,7 @@ Progress goes to stderr, so stdout stays pipeable.
 | `50-user` | `shan`, uid 1000, fish, wheel/input/uucp/video, wheel sudo |
 | `60-net` | enables NetworkManager |
 | `70-keyd` | CapsLock as Meta, Copilot key as `Pause` |
+| `72-trackpoint` | tags the TrackPoint as a pointing stick, so libinput and niri treat it as one |
 | `80-fonts` | vendored CMU Serif; Inter as the default sans-serif; full hinting |
 | `90-fish` | prompt, fortune greeting, git prompt colours |
 | `95-nanorc` | `/etc/nanorc`, the system-wide nano config |
@@ -337,9 +338,16 @@ capslock = overload(meta, f13)
 leftmeta = overload(meta, f13)
 ```
 
-Held, either key is Meta. Tapped, either emits `F13`, and `F13` is bound in
-`config.kdl` to the same `vicinae toggle` command as `Mod+D`. `F13` is otherwise
-unused; `f23` belongs to the Copilot key.
+Held, either key is Meta. Tapped, either emits evdev `KEY_F13`, and that key is
+bound in `config.kdl` to `vicinae toggle`. The bind is written `XF86Tools`, not
+`F13`, and that is not a typo: this keymap maps `<FK13>` to `[ XF86Tools ]`, so a
+bind named `F13` parses, validates, and then never matches anything. Confirm with
+
+```
+xkbcli compile-keymap | grep 'key <FK13>'
+```
+
+`f23` belongs to the Copilot key.
 
 The tap action does not fire when another key is pressed during the hold, so
 `Mod+T` and the rest are unaffected — that property is what makes `overload()`
@@ -376,7 +384,8 @@ fall on the wrong side, so if drawer opens feel unreliable, raise it.
 
 ## The launcher
 
-`Mod+D`, and a tap of CapsLock or Super, run `vicinae toggle`.
+A tap of CapsLock or Super runs `vicinae toggle`. `Mod+V` opens the clipboard
+history through a deeplink, and `Mod+D` is the floating toggle.
 
 `vicinae` is a server plus a client. The client is what the bind runs; the
 window it opens is drawn by a daemon that has to already be up. That daemon
@@ -393,8 +402,11 @@ session, which is when the daemon should come up.
 It is AUR-only (`vicinae-bin`), so it is installed by `aurInstall` in
 `110-niri`, not by `40-packages`.
 
-If the launcher stops opening while `Mod+D` still works, the daemon is the thing
-to check: `vicinae ping`, then `systemctl --user status vicinae.service`.
+If the launcher stops opening, the daemon is the thing to check: `vicinae ping`,
+then `systemctl --user status vicinae.service`. The unit ships disabled; `110`
+enables it by symlink, and when the target is the running system it also starts
+it, because `graphical-session.target` has already been reached by the time the
+ladder writes that link.
 
 ## Touchpad gestures, and the niri patch set
 

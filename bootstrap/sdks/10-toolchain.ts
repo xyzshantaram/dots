@@ -72,7 +72,10 @@ const PNPM_GLOBAL = ["command-code"];
  * none of this comes from a shell rc file.
  */
 function sdkShell(script: string) {
-  const path = [NODE_BIN, PNPM_HOME, CARGO_BIN, "$PATH"].join(":");
+  // pnpm's global bin directory is $PNPM_HOME/bin, not $PNPM_HOME. Leaving it
+  // out makes `pnpm add -g` refuse with ERR_PNPM_GLOBAL_BIN_DIR_NOT_IN_PATH
+  // rather than install, which is how this was found.
+  const path = [NODE_BIN, `${PNPM_HOME}/bin`, CARGO_BIN, "$PATH"].join(":");
   return asUser(
     "bash", "-lc",
     `export PNPM_HOME=${PNPM_HOME}\nexport PATH="${path}"\n${script}`,
@@ -127,7 +130,12 @@ async function installCommandCode(): Promise<void> {
   say("installing Command Code with pnpm");
   const result = await sdkShell("pnpm add --global command-code");
   if (result.exitCode !== 0) died("pnpm add -g command-code", result);
-  say(`command-code installed into ${PNPM_HOME}`);
+
+  if ((await inArchSoft("test", "-x", `${PNPM_HOME}/bin/command-code`)).exitCode !== 0) {
+    say(`pnpm reported success but there is no command-code in ${PNPM_HOME}/bin`);
+    process.exit(1);
+  }
+  say(`command-code installed into ${PNPM_HOME}/bin`);
 }
 
 async function installFishPath(): Promise<void> {
@@ -143,10 +151,11 @@ if test -d $HOME/.cargo/bin
     fish_add_path --move --prepend $HOME/.cargo/bin
 end
 
-# pnpm's global binaries
+# pnpm's global binaries. They live in $PNPM_HOME/bin, not $PNPM_HOME; pnpm
+# itself refuses a global add when that directory is not on PATH.
 set -gx PNPM_HOME $HOME/.local/share/pnpm
-if test -d $PNPM_HOME
-    fish_add_path --move --prepend $PNPM_HOME
+if test -d $PNPM_HOME/bin
+    fish_add_path --move --prepend $PNPM_HOME/bin
 end
 
 # node, through fnm. Sets PATH for the default version, and re-sets it when you
@@ -178,7 +187,7 @@ async function up(): Promise<void> {
   await installFishPath();
 
   say(`node:  ${NODE_BIN}/node  (fnm default)`);
-  say(`pnpm:  ${NODE_BIN}/pnpm, globals in ${PNPM_HOME}`);
+  say(`pnpm:  ${NODE_BIN}/pnpm, globals in ${PNPM_HOME}/bin`);
   say(`rust:  ${CARGO_BIN}/cargo  (rustup)`);
   say("open a new shell for PATH; this step does not touch the running one");
 }

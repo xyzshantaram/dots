@@ -10,6 +10,13 @@
 
 set -gx PATH $HOME/.local/bin $PATH
 
+# Bun, when the official installer put it under ~/.bun. setup-bun.sh installs to
+# /usr/local instead, which needs no PATH entry. A no-op when bun is not there,
+# so this file is still correct on a machine without it.
+if test -x $HOME/.bun/bin/bun
+    set -gx PATH $HOME/.bun/bin $PATH
+end
+
 set -gx EDITOR micro
 
 # Tell programs which desktop they are running under. niri sets this itself,

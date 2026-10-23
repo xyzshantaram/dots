@@ -1,0 +1,15 @@
+# ThinkPad TrackPoint on the i8042 AUX port. Newer sticks report a TrackPoint
+# variant ID (0x07) the kernel driver does not accept yet, so psmouse falls
+# back to "PS/2 Logitech Mouse". Tell libinput it is a pointing stick anyway.
+#
+# Consequence of not having this, all observed on this machine: there is no
+# /sys/bus/serio/devices/serio1/sensitivity (the kernel TrackPoint driver never
+# binds), and libinput applies its generic mouse acceleration curve instead of
+# src/filter-trackpoint.c. niri's `input { trackpoint { } }` block is keyed on
+# the same classification, so none of it reaches the device either.
+#
+# Ported from the Fedora side's trackpoint-config; see 72-trackpoint.ts.
+ACTION=="add|change", SUBSYSTEM=="input", KERNEL=="event*", \
+  ATTRS{name}=="PS/2 Logitech Mouse", \
+  ATTRS{phys}=="isa0060/serio1/input0", \
+  ENV{ID_INPUT_POINTINGSTICK}="1"

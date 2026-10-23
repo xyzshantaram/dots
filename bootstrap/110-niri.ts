@@ -22,7 +22,7 @@
 import process from "node:process";
 import { $ } from "bun";
 import {
-  ARCH_UID, ARCH_USER, asUserSoft, at, aurInstall, inArchSoft, main,
+  ARCH_UID, ARCH_USER, LIVE, asUserSoft, at, aurInstall, inArchSoft, main,
   needMount, removeArch, say, writeArch, writeUserFile,
 } from "./lib.ts";
 
@@ -52,6 +52,27 @@ async function installLauncher(): Promise<void> {
   await $`chown ${ARCH_UID}:${ARCH_UID} ${at(LAUNCHER_WANTS)}`;
   await $`chown -h ${ARCH_UID}:${ARCH_UID} ${at(LAUNCHER_WANTS)}/vicinae.service`;
   say(`enabled vicinae.service for the user session (${LAUNCHER_WANTS})`);
+
+  // Enabling is not enough when the target is the running system. By the time
+  // the ladder writes this link, graphical-session.target has already been
+  // reached, and systemd will not pull the unit in until the next login, so the
+  // launcher has nothing to talk to. Ask that session to load and start it.
+  //
+  // A chroot has no user session to ask, and there the link alone is right.
+  if (!LIVE) return;
+
+  const runtime = `/run/user/${ARCH_UID}`;
+  const session = (line: string) =>
+    $`runuser -u ${ARCH_USER} -- env XDG_RUNTIME_DIR=${runtime} DBUS_SESSION_BUS_ADDRESS=unix:path=${runtime}/bus sh -c ${line}`
+      .nothrow().quiet();
+
+  await session("systemctl --user daemon-reload");
+  const started = await session("systemctl --user start vicinae.service");
+  say(
+    started.exitCode === 0
+      ? "vicinae.service started for this session"
+      : "could not start vicinae.service; it will come up at the next login",
+  );
 }
 
 async function up(): Promise<void> {
@@ -61,8 +82,9 @@ async function up(): Promise<void> {
   await writeUserFile(DEST, content);
   say(`installed ${DEST}`);
 
-  await installLauncher();
-
+  // Local and quick, and before the launcher below: a network failure fetching
+  // vicinae must not leave the mic key pointing at a file that was never
+  // written.
   await writeArch(
     MIC_MUTE,
     await Bun.file(`${import.meta.dir}/files/bin/mic-mute`).text(),
@@ -86,7 +108,11 @@ async function up(): Promise<void> {
   const out = validate.stdout.toString().trim();
   say(out ? `niri validate: ${out}` : "niri validate: config ok");
 
-  say("binds: Mod+T wezterm / Mod+D vicinae / Super+Alt+L gtklock");
+  // Last, because it is the only part that needs the network and an AUR build;
+  // everything above is already usable without it.
+  await installLauncher();
+
+  say("binds: Mod+T wezterm / Mod+V clipboard / Mod+D toggle floating / Super tap vicinae");
   say("keys: volume mute -5% +5%, mic mute, brightness up/down, Pause -> voxtype");
   say("gestures: 3-finger up/down = overview, 4-finger = workspaces and columns");
 }

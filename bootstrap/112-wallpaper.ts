@@ -25,7 +25,7 @@ import process from "node:process";
 import { $ } from "bun";
 import {
   ARCH_UID, ARCH_USER, asUserSoft, at, main, needMount, readArch, removeArch,
-  say, writeArch,
+  say, writeArch, writeUserFile,
 } from "./lib.ts";
 
 const VENDORED = `${import.meta.dir}/files/wallpapers`;
@@ -106,7 +106,7 @@ async function up(): Promise<void> {
   if (config.split("\n").some((l) => l.trim() === SPAWN)) {
     say("niri already starts wallpaper-random");
   } else {
-    await writeArch(NIRI, `${config}${config.endsWith("\n") ? "" : "\n"}${SPAWN}\n`);
+    await writeUserFile(NIRI, `${config}${config.endsWith("\n") ? "" : "\n"}${SPAWN}\n`);
     say("added the wallpaper line to the niri config");
   }
 
@@ -126,7 +126,7 @@ async function down(): Promise<void> {
   const config = await readArch(NIRI);
   if (config !== null) {
     const kept = config.split("\n").filter((l) => l.trim() !== SPAWN);
-    await writeArch(NIRI, kept.join("\n"));
+    await writeUserFile(NIRI, kept.join("\n"));
     say("removed the wallpaper line from the niri config");
   }
 

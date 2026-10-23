@@ -19,16 +19,21 @@ input {
     }
     // TrackPoint: no pointer acceleration, plus a constant speed bump.
     // libinput's accel-speed is an abstract -1..1 (0 = unchanged), not a literal
-    // percentage, so 0.6 is the closest to "about 60%". With accel-profile "flat"
-    // it acts as a constant speed multiplier. Tune by feel.
+    // percentage; 0.55 is what this stick settled on, 0.6 was a touch too fast.
+    // With accel-profile "flat" it acts as a constant speed multiplier.
+    //
+    // None of this reaches the stick until 72-trackpoint.ts has tagged it as a
+    // pointing stick: the kernel rejects its variant 0x07, so psmouse calls it a
+    // plain mouse, and niri keys `trackpoint` on that classification.
     trackpoint {
         accel-profile "flat"
-        accel-speed 0.6
+        accel-speed 0.55
     }
-    // Focus windows and outputs when the pointer moves into them.
-    // max-scroll-amount="0%" stops it scrolling the view to reach a window that
-    // is off-screen; drop the property to allow that scroll.
-    focus-follows-mouse max-scroll-amount="0%"
+    // Focus windows and outputs when the pointer moves into them. No
+    // max-scroll-amount: that qualifier suppresses following for any window the
+    // view would have to scroll to reach, which reads as "focus-follows-mouse
+    // does nothing" on a layout with columns off to the side.
+    focus-follows-mouse
 }
 
 // Tighter than niri's default of 16 logical pixels, inner and outer.
@@ -36,9 +41,9 @@ layout {
     gaps 8
 
     // The outline on the focused window. niri's default is a light blue
-    // (#7fc8ff); "darkorange" is a CSS named colour, so it needs no hex.
+    // (#7fc8ff).
     focus-ring {
-        active-color "darkorange"
+        active-color "#7561c9"
     }
 }
 
@@ -67,11 +72,18 @@ binds {
 
     // Programs
     Mod+T hotkey-overlay-title="Terminal: wezterm" { spawn "wezterm"; }
-    Mod+D hotkey-overlay-title="Launcher: vicinae" { spawn "vicinae" "toggle"; }
-    // Tapping CapsLock or Super emits F13; see files/keyd/default.conf.
+    Mod+D hotkey-overlay-title="Toggle floating" { toggle-window-floating; }
+    // Clipboard history is a vicinae deeplink. `vicinae <link>` is not a
+    // subcommand; `deeplink` is.
+    Mod+V hotkey-overlay-title="Clipboard history" { spawn "vicinae" "deeplink" "vicinae://launch/clipboard/history"; }
+    // Tapping CapsLock or Super emits evdev KEY_F13; see files/keyd/default.conf.
     // niri cannot bind a bare modifier release, so the tap is resolved in keyd
-    // and arrives here as this key.
-    F13 hotkey-overlay-title="Launcher: vicinae (Super tap)" { spawn "vicinae" "toggle"; }
+    // and arrives here as that key. This is the launcher.
+    //
+    // XF86Tools, not F13, and that is not a typo: this keymap maps <FK13> (evdev
+    // 183) to [ XF86Tools ], so a bind named F13 parses, validates and then never
+    // matches. Check with `xkbcli compile-keymap | grep 'key <FK13>'`.
+    XF86Tools hotkey-overlay-title="Launcher: vicinae (Super tap)" { spawn "vicinae" "toggle"; }
     Super+Alt+L hotkey-overlay-title="Lock the screen" { spawn "gtklock"; }
 
     // Hardware keys, as requested:
@@ -148,7 +160,6 @@ binds {
     Mod+C       { center-column; }
     Mod+Minus   { set-column-width "-10%"; }
     Mod+Equal   { set-column-width "+10%"; }
-    Mod+V       { toggle-window-floating; }
     Mod+W       { toggle-column-tabbed-display; }
 
     // Touchpad gestures (from the niri-gestures build; see 105-niri-gestures.ts).

@@ -403,20 +403,31 @@ export async function aurInstall(...packages: string[]): Promise<void> {
       say(`${pkg} has no .SRCINFO; every AUR package ships one`);
       process.exit(1);
     }
-    const wanted = [
+    // Three kinds of dependency, and makepkg checks all of them: makedepends and
+    // checkdepends to build, depends at runtime. An AUR helper installs all
+    // three, and this must too — otherwise a package builds against nothing and
+    // then refuses to build at all with "Could not resolve all dependencies",
+    // which is how vicinae-bin needed libqalculate, qtkeychain-qt6 and
+    // syntax-highlighting from the repositories.
+    //
+    // Left verbatim rather than stripped: pacman resolves a version constraint
+    // (foo>=1) and a soname provide (libfoo.so=1-64) alike, and cutting at the
+    // first '=' would turn the second into a name nothing provides.
+    const wanted = [...new Set([
       ...srcinfoField(meta, "makedepends"),
       ...srcinfoField(meta, "checkdepends"),
-    ].map((dep) => dep.replace(/[<>=].*$/, ""));
+      ...srcinfoField(meta, "depends"),
+    ])];
 
     if (wanted.length > 0) {
-      say(`build dependencies: ${[...new Set(wanted)].join(" ")}`);
+      say(`dependencies: ${wanted.join(" ")}`);
       // --needed skips what is already installed. pacman -S resolves provides,
       // so a dependency named `cargo` finds the rust package providing it.
       const deps = await inArch(
-        "pacman", "-S", "--asdeps", "--needed", "--noconfirm", ...[...new Set(wanted)],
+        "pacman", "-S", "--asdeps", "--needed", "--noconfirm", ...wanted,
       ).nothrow();
       if (deps.exitCode !== 0) {
-        say(`could not install ${pkg}'s build dependencies; see above`);
+        say(`could not install ${pkg}'s dependencies; see above`);
         process.exit(deps.exitCode);
       }
     }
