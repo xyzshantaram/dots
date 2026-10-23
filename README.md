@@ -5,16 +5,20 @@ My dotfiles, plus `sensible-bootstrap/`: the ladder that takes a fresh Arch inst
 ## sensible-bootstrap
 
 - Small reversible steps, one Bun/TypeScript file each, one verb: `up` or `down`.
-- `bun run run.ts up` runs them in order, stops at the first failure.
+- `bun run ladder up` runs them in order, stops at the first failure, and escalates itself — no `sudo` to type.
+- `list` and `plan` are read-only and never ask for a password.
 - `plan` shows a range without running it; `--only <step>` runs exactly one.
-- `--ladder <dir>` runs another ladder directory. No recursion.
+- `bun run ladder dualboot-utils up` runs another ladder directory. No recursion.
 - Idempotent on `up`, exact on `down`.
 - Depends on nothing outside itself — assets come from `files/`, never from another installed OS.
 - `verify.sh` is read-only and safe from either side.
 
 ```
+run.ts            the runner, for every ladder
+package.json      `bun run ladder`, `bun run verify`
+.env              machine values, shared by both ladders (.env.example is the template)
 sensible-bootstrap/
-  dualboot-utils/   drawer, marker, chainload entry — only when two OSes share a disk
+  dualboot-utils/   chainload entry, hibernation marker — only when two OSes share a disk
   files/            vendored assets
   verify.sh
 ```
@@ -49,9 +53,11 @@ sensible-bootstrap/
 
 **Dual boot**
 
+- Its own ladder: `bun run ladder dualboot-utils up`.
+- `10-chainload-entry` chainloads that OS's own EFI binary — no kernels copied.
 - Shared swap: whoever hibernates owns it. Each side labels its own entry `(HIBERNATED)` and sets it the one-shot default — a sign, not a lock.
-- The drawer is read-only. `drawer-rw.service` opens a ten-minute write window, then `ExecStop` puts it back.
-- `hibernate-mark other` refuses that window while the other OS still owns an image.
+- The sleep hook drops `/efi` before the image is written, so the other OS cannot leave a stale FAT behind.
+- Both systems mount the shared home at `/home`: uid 1000 owns its own files from either side, no second mount.
 
 **Repo**
 

@@ -19,7 +19,7 @@
 set -uo pipefail
 
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="$HERE/.env"
+ENV_FILE="$(dirname -- "$HERE")/.env"
 
 pass=0; fail=0; warn=0
 ok()   { printf '  PASS  %s\n' "$*"; pass=$((pass + 1)); }
@@ -32,7 +32,7 @@ head_() { printf '\n== %s\n' "$*"; }
 # --- environment ----------------------------------------------------------
 if [ ! -f "$ENV_FILE" ]; then
     printf 'verify: no .env at %s\n' "$ENV_FILE" >&2
-    printf 'verify: cp .env.example .env and fill it in\n' >&2
+    printf 'verify: cp .env.example .env at the repo root and fill it in\n' >&2
     exit 2
 fi
 

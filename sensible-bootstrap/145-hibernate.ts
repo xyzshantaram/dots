@@ -14,7 +14,7 @@
  *
  * When a swap partition is shared with another installed OS, whoever hibernates
  * owns it: booting the other one starts that swap unit and discards the image.
- * The mitigation lives in dualboot-utils/hibernate-mark.ts, which labels the
+ * The mitigation lives in dualboot-utils/20-hibernate-mark.ts, which labels the
  * hibernated entry and makes it the one-shot boot default. It is a sign, not a
  * lock — see dualboot-utils/README.md.
  *

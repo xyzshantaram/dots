@@ -1,34 +1,45 @@
 /**
- * run.ts — the ladder runner.
+ * run.ts — the ladder runner. Lives at the repo root; the steps live in
+ * sensible-bootstrap/.
  *
- *   bun run run.ts list                     every step, with its description
- *   bun run run.ts plan [from] [to]         what a range would run, no execution
- *   bun run run.ts up [from] [to]           run them in numeric order
- *   bun run run.ts down [from] [to]         run them in reverse order
- *   bun run run.ts up --only <step>         run exactly one step
- *   bun run run.ts --ladder dualboot-utils up
+ *   bun run ladder list                        every step, with its description
+ *   bun run ladder plan [from] [to]            what a range would run
+ *   bun run ladder up [from] [to]              run them in numeric order
+ *   bun run ladder down [from] [to]            run them in reverse order
+ *   bun run ladder up --only <step>            exactly one step
+ *   bun run ladder dualboot-utils up           another ladder, by name
+ *
+ * `bun run ladder` is the package.json script for this file, so no `sudo` is
+ * needed on the command line: up and down escalate themselves, once, and
+ * list/plan stay unprivileged.
  *
  * A ladder is a directory of numbered TypeScript steps. Each one takes `up` or
  * `down`, is idempotent on `up` and exact on `down`, and describes itself in its
  * frontmatter.
  *
- * --ladder picks one directory and looks only at the steps directly inside it.
- * Nothing is traversed, so the main ladder never picks up dualboot-utils/, and
- * that stays true however the flag is spelled.
+ * The first argument names a ladder when it is not one of the four verbs. Names
+ * are looked for at the repo root and then inside the main ladder, so both
+ * `dualboot-utils` and `sensible-bootstrap` work. Only the steps directly inside
+ * that directory are read: nothing is traversed, so the main ladder never picks
+ * up the dualboot one, and that one never reaches back. `--ladder <dir>` is the
+ * same thing as an explicit flag.
  *
  * With only `from` given the range runs to the last step, so `up 130-paru`
- * resumes there rather than running that one step alone. --only is how to ask
+ * resumes there rather than running that one step alone. `--only` is how to ask
  * for a single step.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import process from "node:process";
-import { parseFrontmatter } from "./lib.ts";
+import { parseFrontmatter } from "./sensible-bootstrap/lib.ts";
 
-const HERE = import.meta.dir;
+const ROOT = import.meta.dir;
+const MAIN_LADDER = join(ROOT, "sensible-bootstrap");
 
 /** Lives in the main ladder but is a helper, not a phase of the build. */
-const SKIP_IN_RUN = new Set(["20-chroot.ts"]);
+const SKIP_IN_MAIN = new Set(["20-chroot.ts"]);
+
+const VERBS = new Set(["list", "plan", "up", "down"]);
 
 type Step = { file: string; num: number; meta: Record<string, string> };
 
@@ -60,14 +71,15 @@ function stepsIn(dir: string): Step[] {
 /**
  * Finds the ladder directory.
  *
- * Relative names are looked for beside this script first, then beside its
- * parent, so both `--ladder dualboot-utils` and `--ladder sensible-bootstrap`
- * work when run from the repo root. No recursion either way.
+ * Names are looked for at the repo root first, then inside the main ladder, so
+ * `dualboot-utils` and `sensible-bootstrap` both work. Absolute paths are used
+ * as given. No recursion either way.
  */
 function resolveLadder(name?: string): string {
-  if (name === undefined) return resolve(HERE);
+  if (name === undefined) return MAIN_LADDER;
 
-  const candidates = [join(HERE, name), join(dirname(HERE), name)];
+  const candidates = isAbsolute(name) ? [name] : [join(ROOT, name), join(MAIN_LADDER, name)];
+
   for (const candidate of candidates) {
     if (existsSync(candidate) && statSync(candidate).isDirectory()) return resolve(candidate);
   }
@@ -83,9 +95,9 @@ function parseArgs(argv: string[]): Args {
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    const take = (name: string): string => {
+    const take = (flag: string): string => {
       const value = argv[++i];
-      if (value === undefined) fail(`${name} needs a value`);
+      if (value === undefined) fail(`${flag} needs a value`);
       return value;
     };
 
@@ -95,6 +107,12 @@ function parseArgs(argv: string[]): Args {
     else if (arg.startsWith("--only=")) args.only = arg.slice("--only=".length);
     else if (arg.startsWith("-")) fail(`unknown flag ${arg}`);
     else positional.push(arg);
+  }
+
+  // A leading word that is not a verb has to be a ladder name.
+  if (positional.length > 0 && !VERBS.has(positional[0])) {
+    if (args.ladder !== undefined) fail("two ladders named; use one or the other");
+    args.ladder = positional.shift();
   }
 
   [args.command, args.from, args.to] = positional;
@@ -123,7 +141,9 @@ function selectSteps(dir: string, skip: Set<string>, args: Args): Step[] {
 
 async function runStep(dir: string, step: Step, action: "up" | "down"): Promise<void> {
   console.error(`\n=== ${step.file} (${action}) ${step.meta.desc ?? ""}`);
-  const proc = Bun.spawn(["bun", "run", join(dir, step.file), action], {
+  // process.execPath is this bun binary, so the child keeps working even when
+  // sudo's secure_path does not include the one that started this.
+  const proc = Bun.spawn([process.execPath, "run", join(dir, step.file), action], {
     stdout: "inherit",
     stderr: "inherit",
     stdin: "inherit",
@@ -138,11 +158,23 @@ async function runStep(dir: string, step: Step, action: "up" | "down"): Promise<
 }
 
 const args = parseArgs(process.argv.slice(2));
+
+// up and down touch the disk, and every step asserts root, so escalate once
+// here instead of making the caller remember. list and plan are read-only, so
+// they stay unprivileged and answer without a password prompt.
+if ((args.command === "up" || args.command === "down") && process.getuid?.() !== 0) {
+  const raised = Bun.spawn(
+    ["sudo", process.execPath, "run", import.meta.path, ...process.argv.slice(2)],
+    { stdin: "inherit", stdout: "inherit", stderr: "inherit", env: process.env },
+  );
+  process.exit(await raised.exited);
+}
+
 const dir = resolveLadder(args.ladder);
 
 /** The skip list belongs to the main ladder, not to any other directory. */
-const skip = dir === resolve(HERE) ? SKIP_IN_RUN : new Set<string>();
-const usage = "usage: bun run run.ts list|plan|up|down [from] [to] [--only step] [--ladder dir]";
+const skip = dir === resolve(MAIN_LADDER) ? SKIP_IN_MAIN : new Set<string>();
+const usage = "usage: bun run ladder [ladder] list|plan|up|down [from] [to] [--only step]";
 
 switch (args.command) {
   case "list": {
@@ -155,7 +187,7 @@ switch (args.command) {
   case "plan": {
     // Read-only: nothing is spawned, and no root is needed.
     const chosen = selectSteps(dir, skip, args);
-    console.log(`${dir}`);
+    console.log(dir);
     console.log(`${chosen.length} step(s), in this order:`);
     chosen.forEach((s, i) => {
       console.log(`${String(i + 1).padStart(2)}. ${s.file.padEnd(24)} ${s.meta.desc ?? ""}`);

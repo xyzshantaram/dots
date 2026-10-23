@@ -40,19 +40,26 @@ Every step is TypeScript, run with Bun, and takes one argument:
 `up` or `down`. `do`/`undo` were the obvious names but `do` is a reserved word
 in JavaScript, so the verbs are `up`/`down`.
 
+Run everything from the repo root, one directory up. The runner and the `.env`
+live there; the steps live here.
+
 ```
-sudo ./setup-bun.sh                     # once: puts bun where sudo can see it
 cp .env.example .env                    # then fill in the UUIDs
-bun run run.ts list                     # see the ladder
-sudo bun run run.ts up                  # everything, in order
-sudo bun run run.ts up 40-packages      # resume from a step to the end
-sudo bun run run.ts up --only 70-keyd   # or exactly one step
-sudo bun run run.ts down 150-kernel-sync 12-esp-efi   # unwind a range backwards
 
-sudo bun run run.ts --ladder dualboot-utils up   # the optional two-system ladder
+bun run ladder list                     # see the ladder
+bun run ladder plan                     # what up would run, no changes
+bun run ladder up                       # everything, in order
+bun run ladder up 40-packages           # resume from a step to the end
+bun run ladder up --only 70-keyd        # or exactly one step
+bun run ladder down 150-kernel-sync 12-esp-efi   # unwind a range backwards
+
+bun run ladder dualboot-utils up        # the optional two-system ladder
 ```
 
-`run.ts` stops at the first failure and prints the step to re-run. Every step
+`bun run ladder` takes care of sudo: `up` and `down` escalate once, themselves.
+`list` and `plan` are read-only, so they never ask for a password.
+
+The runner stops at the first failure and prints the step to re-run. Every step
 is idempotent on `up`: re-running it is safe and usually a no-op.
 
 Progress goes to stderr, so stdout stays pipeable.
@@ -61,7 +68,7 @@ Progress goes to stderr, so stdout stays pipeable.
 
 | step | does |
 | --- | --- |
-| `setup-bun.sh` | installs Bun system-wide, smoke-tests Bun Shell |
+| `setup-bun.sh` | optional: installs Bun system-wide, smoke-tests Bun Shell |
 | `00-check` | read-only preflight: UUIDs, block devices, ESP room, host tools |
 | `10-mount` | btrfs `subvol=@` → `/mnt/arch`, ESP → `/mnt/arch$ESP_MOUNT` |
 | `12-esp-efi` | moves the ESP mountpoint from `/boot/efi` to `/efi` in fstab |

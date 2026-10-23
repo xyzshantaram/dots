@@ -12,19 +12,21 @@ import { basename, dirname, join } from "node:path";
 import process from "node:process";
 
 /**
- * Loads .env from the directory this file lives in, not from the cwd.
+ * Loads .env from the repo root, not from the cwd.
  *
- * The steps are run under sudo, often from another directory, and Bun's own
- * .env discovery is cwd-based. Read it explicitly so the same values apply
- * however a step is invoked. Real environment variables win over the file,
- * matching Bun's precedence.
+ * One .env serves both ladders, so it sits beside package.json and run.ts
+ * rather than inside either ladder directory. The steps are run under sudo,
+ * often from another directory, and Bun's own .env discovery is cwd-based.
+ * Read it explicitly so the same values apply however a step is invoked. Real
+ * environment variables win over the file, matching Bun's precedence.
  */
-const ENV_FILE = join(import.meta.dir, ".env");
+const REPO_ROOT = dirname(import.meta.dir);
+const ENV_FILE = join(REPO_ROOT, ".env");
 
 if (!existsSync(ENV_FILE)) {
   console.error(
     `lib: no .env at ${ENV_FILE}\n` +
-      `lib: copy the template and fill it in: cp ${join(import.meta.dir, ".env.example")} ${ENV_FILE}`,
+      `lib: copy the template and fill it in: cp ${join(REPO_ROOT, ".env.example")} ${ENV_FILE}`,
   );
   process.exit(1);
 }

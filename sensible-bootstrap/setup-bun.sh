@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ---
 # script: setup-bun.sh
-# desc:   Installs Bun system-wide so the ladder scripts (TypeScript, run with
-#         `bun run`) work under sudo, where $HOME and secure_path do not
-#         include ~/.bun/bin.
+# desc:   Optional. Installs Bun system-wide and smoke-tests Bun Shell.
+#         Not needed to run the ladder: `bun run ladder` re-execs itself with
+#         the absolute path of the bun that started it, so sudo does not need
+#         bun on PATH. Kept for a machine where bun is not installed at all.
 # needs:  curl, unzip (only when it has to install)
 # do:     finds bun on PATH, else reuses ~/.bun/bin/bun, else installs to
 #         /usr/local via Bun's official installer. Then smoke-tests Bun Shell.
@@ -71,4 +72,4 @@ if ! bun -e 'Bun.file' >/dev/null 2>&1; then
     die "bun cannot evaluate TypeScript"
 fi
 
-say "ready — next: sudo bun run 00-check.ts do"
+say "ready — next: bun run ladder up --only 00-check"

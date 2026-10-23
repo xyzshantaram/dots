@@ -4,16 +4,17 @@ Optional. Everything here exists only because two installed systems share a
 disk. **Nothing in the main ladder depends on any of it**, and every key it reads
 may be left unset.
 
-It is its own ladder, run with the same runner, from `sensible-bootstrap/`:
+It is its own ladder, run with the same runner from the repo root:
 
 ```
-bun run run.ts --ladder dualboot-utils list
-bun run run.ts --ladder dualboot-utils plan
-sudo bun run run.ts --ladder dualboot-utils up
+bun run ladder dualboot-utils list
+bun run ladder dualboot-utils plan
+bun run ladder dualboot-utils up
 ```
 
-`--ladder` picks one directory and reads only the steps directly inside it, so
-the main ladder never picks these up and this one never reaches back.
+Naming a ladder picks that one directory and reads only the steps directly
+inside it, so the main ladder never picks these up and this one never reaches
+back.
 
 - `10-chainload-entry` — the other OS in the boot menu.
 - `20-hibernate-mark` — both sides learn to label their own entry.

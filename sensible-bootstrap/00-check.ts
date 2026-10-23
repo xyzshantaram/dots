@@ -162,7 +162,9 @@ async function up(): Promise<void> {
   }
 
   say("host tools");
-  for (const tool of ["arch-chroot", "pacstrap", "genfstab", "efibootmgr", "blkid", "bun"]) {
+  // Not bun: the runner re-execs itself with an absolute bun path, and spawns
+  // each step with that same path, so root never needs it on PATH.
+  for (const tool of ["arch-chroot", "pacstrap", "genfstab", "efibootmgr", "blkid"]) {
     check(`${tool} on PATH`, (await $`command -v ${tool}`.nothrow().quiet()).exitCode === 0);
   }
 
