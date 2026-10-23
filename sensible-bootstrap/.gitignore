@@ -3,14 +3,12 @@
 
 # Left behind by any step that backs up a target file before editing it.
 # In the target: .pam-save .keyd-save .fstab-save .hib-save .pre-esp-sync .greetd-save
-# In dualboot-utils: .drawer-save
 *.pam-save
 *.keyd-save
 *.fstab-save
 *.hib-save
 *.pre-esp-sync
 *.greetd-save
-*.drawer-save
 *.sensible-bootstrap-save
 
 node_modules/
