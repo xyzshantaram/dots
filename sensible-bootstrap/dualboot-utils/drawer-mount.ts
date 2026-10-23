@@ -86,9 +86,15 @@ async function up(): Promise<void> {
 
   await $`mkdir -p ${mount}`;
   if (!(await isMounted(mount))) {
-    const mounted = await $`mount ${mount}`.nothrow();
+    // Mount by device, not by a bare mountpoint. The fstab entry written just
+    // above belongs to the target; `mount /mnt/drawer` resolves through the
+    // fstab of the machine running this, which has never heard of it and says
+    // exactly that:
+    //
+    //   mount: /mnt/drawer: can't find in /etc/fstab.
+    const mounted = await $`mount /dev/disk/by-uuid/${uuid} -o ro ${mount}`.nothrow();
     if (mounted.exitCode !== 0) {
-      say("mount failed; the fstab entry is in place and will retry at boot");
+      say("mount failed; the target's fstab entry is in place, so the target mounts it at its own boot");
       process.stderr.write(mounted.stderr.toString());
       process.exit(1);
     }
