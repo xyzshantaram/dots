@@ -11,19 +11,29 @@ Rectangle {
 
     /// Children land in the row inside the pill.
     default property alias content: row.data
-    property int padding: 4
-    property int spacing: Theme.gap / 2
 
-    // Take the bar's height rather than arguing with it. A pill sized purely by
-    // its contents is taller than the strip it sits in as soon as the text
-    // grows, and the bar window clips rather than complains.
-    Layout.fillHeight: true
+    // Horizontal padding is the wider of the two. Text needs room at its ends
+    // in a way it does not need above and below, where the strip's own margin
+    // already surrounds it.
+    property int paddingX: 8
+    property int paddingY: 4
+    property int spacing: Theme.gap / 2
 
     color: Theme.surfacePill
     // Fully rounded, so it stays a pill at any height.
     radius: Theme.pillRadius
-    implicitWidth: row.implicitWidth + padding * 2
-    implicitHeight: row.implicitHeight + padding * 2
+
+    // Every pill takes the strip's height, minus the layout's margins, so they
+    // are all exactly as tall as each other. Sized by contents instead, the
+    // clock ran taller than the window title and the two stopped lining up.
+    //
+    // This is why Theme.barHeight has to be at least the tallest pill's own
+    // height plus twice the margin: the pill is stretched to whatever is left,
+    // and there is no second chance to be clipped out of it.
+    Layout.fillHeight: true
+
+    implicitWidth: row.implicitWidth + paddingX * 2
+    implicitHeight: row.implicitHeight + paddingY * 2
 
     RowLayout {
         id: row

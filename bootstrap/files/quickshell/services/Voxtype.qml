@@ -24,10 +24,17 @@ Singleton {
     /** voxtype's own wording, shown on hover. */
     property string tooltip: ""
 
+    /**
+     * Anything that is not idle or unavailable means the daemon is working —
+     * held, transcribing, or whatever else it calls the step after that.
+     *
+     * Matching the exact name of that third state would break the moment
+     * voxtype renamed it, and the distinction the bar actually draws is only
+     * "quiet or busy", and then "recording or not recording" for the styling.
+     */
+    readonly property bool busy: state !== "idle" && state !== "unavailable"
     readonly property bool recording: state === "recording"
-    readonly property bool processing: state === "processing"
-    /** True whenever the pill should be on screen at all. */
-    readonly property bool busy: recording || processing
+    readonly property bool processing: busy && !recording
 
     /** The Pause key does this; clicking the pill should too. */
     function toggle(): void {

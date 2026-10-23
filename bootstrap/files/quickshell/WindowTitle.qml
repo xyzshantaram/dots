@@ -32,8 +32,17 @@ Pill {
     Image {
         visible: root.iconSource !== ""
         source: root.iconSource
-        sourceSize.width: 16
-        sourceSize.height: 16
+
+        // Layout.preferred*, not width/height. Inside a Layout, an item's
+        // width and height are managed by the layout, which asks for its
+        // implicit size instead — and an Image's implicit size is the size of
+        // its source, so `width: 16` was quietly ignored and the icon was laid
+        // out at sourceSize, dragging the whole pill taller with it.
+        Layout.preferredWidth: Theme.iconSize
+        Layout.preferredHeight: Theme.iconSize
+        // Loaded at 2x so it stays crisp on a scaled output, then drawn small.
+        sourceSize.width: Theme.iconSize * 2
+        sourceSize.height: Theme.iconSize * 2
         fillMode: Image.PreserveAspectFit
         // Its own colours, as asked: a monochrome icon is how an app is
         // recognised, and tinting it would take that away.

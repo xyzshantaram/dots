@@ -33,7 +33,11 @@ Scope {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: Theme.gap / 2
+                // A quarter of the layout gap: enough for the pills to read as
+                // floating, tight enough that the bar stays slim. Equal on all
+                // four sides, which is what a RowLayout's vertical centring of
+                // each pill then makes visible.
+                anchors.margins: Theme.gap / 4
                 spacing: Theme.gap
 
                 // Left: when it is, what is focused, and what is playing.

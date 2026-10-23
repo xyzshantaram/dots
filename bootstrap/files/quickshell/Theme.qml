@@ -63,16 +63,28 @@ Singleton {
     readonly property string iconFont:   "FantasqueSansM Nerd Font Mono"
     readonly property int fontSize:      13
     readonly property int fontSizeSmall: 11
-    readonly property int fontSizeLarge: 15
+    // The clock's size, and what sets the height of every pill on the bar: it
+    // is the tallest text, and the strip has to fit it plus padding and margin.
+    readonly property int fontSizeLarge: 14
+
+    // --- sizing -----------------------------------------------------------
+    // Bar icons: the application icon and the nerd-font glyphs, sized against
+    // the pill rather than against the text. At the text's size they read as
+    // specks next to a 14px clock.
+    readonly property int iconSize: 18
 
     // --- geometry ---------------------------------------------------------
     // Gaps are 8 in niri's layout; the bar uses the same number so its margin
     // against the screen edge and the gap between windows agree.
     readonly property int gap:        8
-    // Tall enough for the largest pill plus its padding: the clock sets the
-    // floor at fontSizeLarge, and the half-gap margins above and below take 8.
-    // At 32 the pills were clipped along their bottom edge.
-    readonly property int barHeight:  36
+
+    // The strip, and nothing more than the strip: this is also the window's
+    // exclusive zone, so it is exactly the space windows are pushed down by.
+    // 2 of margin + a 30px pill + 2 of margin. A pill is stretched to
+    // barHeight - 2 * (gap / 4), so lowering this clips them rather than
+    // making them slimmer.
+    readonly property int barHeight:  34
+
     readonly property int pillRadius: 999   // fully rounded
     readonly property int radiusCard: 18
     readonly property int radiusSmall: 12

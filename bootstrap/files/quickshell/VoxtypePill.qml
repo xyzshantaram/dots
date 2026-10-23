@@ -15,21 +15,25 @@ Pill {
     visible: Voxtype.busy
 
     Text {
-        visible: Voxtype.recording
+        // The microphone is the constant: it says what the pill is about. It
+        // stays for as long as the daemon is busy, whether it is taking audio
+        // or working on what it already took.
+        visible: Voxtype.busy
         text: "\uf130"   // nf-fa-microphone
         color: Theme.alert
         font.family: Theme.iconFont
-        font.pixelSize: Theme.fontSize
+        font.pixelSize: Theme.iconSize
     }
 
     // The dot breathes rather than blinks: a hard on/off reads as an error
-    // indicator, a fade reads as something happening.
+    // indicator, a fade reads as something happening. Only while capturing —
+    // once the microphone is closed there is nothing to warn about.
     Rectangle {
         visible: Voxtype.recording
         Layout.alignment: Qt.AlignVCenter
-        width: 6
-        height: 6
-        radius: 3
+        width: 8
+        height: 8
+        radius: 4
         color: Theme.recording
 
         SequentialAnimation on opacity {
@@ -45,7 +49,7 @@ Pill {
         text: "\uf110"   // nf-fa-spinner
         color: Theme.text
         font.family: Theme.iconFont
-        font.pixelSize: Theme.fontSize
+        font.pixelSize: Theme.iconSize
         // Centred on itself, or the glyph orbits the corner of its box.
         transformOrigin: Item.Center
 

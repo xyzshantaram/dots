@@ -1,26 +1,70 @@
 import QtQuick
 import QtQuick.Layouts
 
-// Time and date, leftmost on the bar. White, as asked — this is the one thing
-// up there that gets read rather than glanced at.
+// Time and date, leftmost on the bar.
+//
+// HH:MM in bold, then the seconds at the same size in regular weight — a single
+// Text cannot change weight part-way through, so the clock is three of them.
+// The seconds hug the minutes; the day and date sit a gap away.
+//
+// White, as asked. Situation.clockColour is where the evening warmth comes in.
 Pill {
-    Text {
-        text: Qt.formatDateTime(ticker.now, "HH:mm")
-        color: Theme.text
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeLarge
-        font.bold: true
+    RowLayout {
+        spacing: 1
+
+        Text {
+            text: Qt.formatDateTime(ticker.now, "HH:mm")
+            color: Theme.text
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSizeLarge
+            font.bold: true
+        }
+
+        Text {
+            // The colon rides with the seconds. Bold stops at the minutes, as
+            // asked, and a bare "12" after "04:33" reads as a separate number.
+            // Grey: it is the part that changes every second, and the eye
+            // should not be pulled to it.
+            text: `:${Qt.formatDateTime(ticker.now, "ss")}`
+            color: Theme.textMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSizeLarge
+        }
     }
 
-    Text {
-        text: Qt.formatDateTime(ticker.now, "ddd d MMM")
-        color: Theme.text
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
+    // The day and the date in bold, the year not: bold, regular, bold across
+    // three Texts, because a single Text cannot change weight mid-string.
+    RowLayout {
+        spacing: 0
+
+        Text {
+            text: Qt.formatDateTime(ticker.now, "ddd")
+            color: Theme.text
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize
+            font.bold: true
+        }
+
+        Text {
+            // The hyphen goes with the year, not with the date: the bold run
+            // starts at the month, so the separator stays in the greyed part.
+            text: Qt.formatDateTime(ticker.now, " yyyy-")
+            color: Theme.textMuted
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize
+        }
+
+        Text {
+            text: Qt.formatDateTime(ticker.now, "MM-dd")
+            color: Theme.text
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize
+            font.bold: true
+        }
     }
 
-    // One tick a minute is enough for a clock that shows no seconds, and the
-    // first tick is on start so the bar does not open with an empty pill.
+    // One tick a second now that the seconds are shown, and the first tick on
+    // start so the bar does not open with an empty pill.
     Timer {
         id: ticker
         property date now: new Date()

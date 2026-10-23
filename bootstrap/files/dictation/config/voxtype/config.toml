@@ -39,3 +39,18 @@ remote_timeout_secs = 120
 mode = "type"
 driver_order = ["wtype", "dotool", "ydotool", "clipboard"]
 type_delay_ms = 3
+
+[audio]
+# Name PipeWire outright rather than leaving this at voxtype's default of
+# `default`. voxtype opens ALSA directly, and ALSA's `default` runs through the
+# plugin chain, where voxtype's dsnoop layer cannot open the PipeWire slave:
+#
+#   ALSA lib pcm_dsnoop.c:572:(snd_pcm_dsnoop_open) unable to open slave
+#   ERROR Failed to start audio: Audio connection failed:
+#     The requested device is no longer available.
+#
+# Every recording attempt failed that way — and only that way, so the daemon
+# looked healthy and simply went back to idle, with no pill and no preview to
+# show for the key press. `voxtype info devices` lists the names it accepts;
+# pipewire-alsa (also in 40-packages) is what puts `pipewire` in that list.
+device = "pipewire"

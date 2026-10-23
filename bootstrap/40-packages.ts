@@ -11,9 +11,17 @@
 import process from "node:process";
 import { inArch, inArchSoft, main, needMount, say } from "./lib.ts";
 
+/**
+ * pipewire-alsa is the bridge from ALSA's `default` device to PipeWire, and
+ * pipewire-jack the same for JACK clients. Without the first, an application
+ * that opens ALSA rather than PipeWire — voxtype does — finds no capture device
+ * at all and reports "The requested device is no longer available", which is
+ * what broke dictation on the first boot.
+ */
 const BASE = [
   "base-devel", "git", "sudo", "fish", "bash", "btrfs-progs", "nano",
-  "networkmanager", "pipewire", "pipewire-pulse", "wireplumber",
+  "networkmanager", "pipewire", "pipewire-pulse", "pipewire-alsa", "pipewire-jack",
+  "wireplumber",
 ];
 
 /**
