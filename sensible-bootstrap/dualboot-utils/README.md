@@ -1,100 +1,65 @@
 # dualboot-utils
 
-Optional. Everything in here exists only because two installed systems share a
-disk. **Nothing in the ladder above depends on any of it**, and every key these
-tools read may be left unset.
+Optional. Everything here exists only because two installed systems share a
+disk. **Nothing in the main ladder depends on any of it**, and every key it reads
+may be left unset.
 
-The base ladder builds a working Arch desktop from the install guide plus this
-repo. These tools handle the parts that genuinely have to cross an OS
-boundary, and nothing they depend on comes out of the other install either —
-the assets they used to share are vendored into the base repo instead.
-
-Run them by hand, from `sensible-bootstrap/`, in this order:
+It is its own ladder, run with the same runner, from `sensible-bootstrap/`:
 
 ```
-bun run dualboot-utils/drawer-mount.ts up        # read-only drawer + drawer-rw.service
-bun run dualboot-utils/hibernate-mark.ts up      # both sides get the marker
-bun run dualboot-utils/chainload-entry.ts up     # other OS in the boot menu
-bun run dualboot-utils/drawer-export.ts up       # pull files in
+bun run run.ts --ladder dualboot-utils list
+bun run run.ts --ladder dualboot-utils plan
+sudo bun run run.ts --ladder dualboot-utils up
 ```
 
-`run.ts` never picks these up: it only globs `^\d+-.+\.ts$` in the parent
-directory.
+`--ladder` picks one directory and reads only the steps directly inside it, so
+the main ladder never picks these up and this one never reaches back.
 
-## The drawer
+- `10-chainload-entry` — the other OS in the boot menu.
+- `20-hibernate-mark` — both sides learn to label their own entry.
 
-A read-only mount of another OS's home, so its files can be read from here.
-Called a drawer rather than anything OS-named because that is all it is: a
-read-only door.
+Order matters only in that the chainload entry has to exist before
+`hibernate-mark` can put `(HIBERNATED)` in its title.
 
-```
-DRAWER_UUID=...      that OS's /home partition
-DRAWER_USER=...      whose home, inside it
-DRAWER_MOUNT=/mnt/drawer
-```
+## Chainload entry
 
-Mounted `ro,nofail,x-systemd.automount,x-systemd.idle-timeout=10min`, so it
-appears on first access and disappears when idle. Unset `DRAWER_UUID` and
-`drawer-mount.ts` simply says there is nothing to do.
-
-Read-only on purpose. Writes land as that OS's user — ext4 stores owners as
-numbers, and both installs usually have 1000 — so anything created here belongs
-to someone over there.
-
-### Read-write window
-
-`drawer-mount.ts` installs one systemd unit:
+Adds `loader/entries/fedora.conf` on the ESP, pointing at the other OS's own EFI
+binary:
 
 ```
-systemctl start drawer-rw     read-write now, read-only again in 10 minutes
-systemctl stop drawer-rw      read-only now
-systemctl status drawer-rw    how long is left
+EFI/fedora/shimx64.efi        Secure Boot
+EFI/fedora/grubx64.efi        Secure Boot off
+EFI/fedora/shimx64-fedora.efi
 ```
 
-It is a `Type=oneshot` unit with `RemainAfterExit=yes`. That second line is
-load-bearing: `mount` returns in milliseconds, so without it `RuntimeMaxSec`
-would fire immediately and there would be no window at all. `ExecStop` is what
-puts it back to read-only, and it runs whether you stop it or the timer does.
-
-### The guard
-
-`ExecStartPre` runs `hibernate-mark other` before anything is remounted. When a
-different OS's boot entry still carries `(HIBERNATED)`, that install owns a
-hibernation image, and writing its filesystem from here is how a home directory
-is lost. The unit refuses.
-
-The guard **allows** when it cannot tell — no ESP mounted, no marker installed.
-Refusing every read-write window because some unrelated thing was unmounted
-would be worse than the risk it manages.
-
-It also errs safe in the other direction: if that OS was powered off
-mid-hibernation rather than resumed, its marker survives and the window is
-refused even though writing would have been fine. An occasional false refusal,
-with a clear reason, beats one silent corruption.
+- Nothing is copied — that OS keeps owning its own kernels.
+- Absent EFI directory means the step says so and stops; a single-boot machine
+  sees no error.
+- `OTHER_OS_EFI_DIR` and `OTHER_OS_LABEL` in `.env` change the directory and the
+  menu title.
 
 ## Shared swap
 
-Two installed systems sharing a swap partition means whoever hibernates owns
-it. Booting the other starts its swap unit and discards the image — this
-already happened once on this machine. `hibernate-mark` is the whole
-mitigation: before hibernating, each side labels its own entry `(HIBERNATED)`
-and sets itself as the **one-shot** boot default, so the menu shows who holds an
-image and points at that entry.
+Two installed systems sharing a swap partition means whoever hibernates owns it.
+Booting the other starts its swap unit and discards the image — this already
+happened once on this machine.
 
-It is a sign, not a lock. Picking the other entry by hand still costs you the
-session. Nothing here can be otherwise without taking hibernation away from one
-side.
+- Before hibernating, each side appends `(HIBERNATED)` to its own entry titles
+  and sets its entry as the **one-shot** boot default.
+- `hibernate-mark-clear.service` and the post-sleep hook both clear it: a resume
+  does not re-run boot units, and an interrupted hibernation leaves a stale mark.
+- It is a sign, not a lock. Picking the other entry by hand still costs you the
+  session.
 
-The Arch-side unit `hibernate-mark-clear.service` covers the boot after an
-interrupted hibernation, and the post-sleep hook covers a resume, which does
-not re-run boot units. Both exist because either alone leaves a stale label.
+`hibernate-mark` installs on **both** systems — it detects which OS is running
+and touches only that OS's entries, so one script serves both sides. It finds the
+ESP at `/efi` or `/boot/efi`, whichever that OS uses.
 
-## Files moved here
+## The shared ESP
 
-`drawer-mount.ts` and the read-write window were `125-fh-mount.ts` and
-`127-fh-rw.ts`. The chainload entry was `140-fedora-entry.ts`. The marker was
-`160-boot-marker.ts` plus `fedora-side.sh`, which is now one TypeScript step
-instead of a second language to keep in sync.
+The sleep hook unmounts `/efi` before the image is written and remounts it after.
+Leaving it mounted means the other OS can write to it during a kernel update
+while the hibernation image still believes its state, which leaves a stale FAT.
 
-Nothing was dropped. `files/marker/` and the pre-hibernate sleep hook moved
-with them.
+The homes are shared too, but are not dropped: both systems treat that partition
+as `/home`, so unmounting it would take the running session's home with it.

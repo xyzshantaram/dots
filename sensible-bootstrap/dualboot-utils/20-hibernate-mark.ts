@@ -1,7 +1,7 @@
 /**
  * ---
  * script: hibernate-mark.ts
- * desc: Installs hibernate-mark on both installed systems, so either can show "(HIBERNATED)" in the boot menu and set itself as the one-shot default, plus the sleep hook that leaves shared filesystems alone before the image is written.
+ * desc: Installs hibernate-mark on both installed systems, so either can show "(HIBERNATED)" in the boot menu and set itself as the one-shot default, plus the sleep hook that drops the shared ESP before the image is written.
  * needs: ../145-hibernate.ts up, ../150-kernel-sync.ts up
  * up: target and host each get hibernate-mark, the boot-time clear service on this side, and a pre-hibernate sleep hook
  * down: removes everything it added on both sides and clears any marker left behind
@@ -28,7 +28,7 @@
 import { $ } from "bun";
 import process from "node:process";
 import {
-  inArchSoft, main, needMount, opt, removeArch, say, writeArch,
+  inArchSoft, main, needMount, removeArch, say, writeArch,
 } from "../lib.ts";
 
 const FILES = `${import.meta.dir}/files`;
@@ -50,18 +50,7 @@ async function up(): Promise<void> {
     "/etc/systemd/system/hibernate-mark-clear.service",
     await Bun.file(CLEAR_UNIT).text(),
   );
-  // The hook knows the drawer by path. Substitution rather than reading it at
-  // runtime: system-sleep hooks get no environment, and the drawer is already
-  // unmounted by the time anything else could be consulted. Empty when there
-  // is no drawer, which makes the hook skip that branch.
-  const drawerMount = opt("DRAWER_MOUNT") ?? "/mnt/drawer";
-  const hookSource = (await Bun.file(HOOK).text())
-    .replace("@DRAWER_MOUNT@", opt("DRAWER_UUID") ? drawerMount : "");
-  if (hookSource.includes("@DRAWER_MOUNT@")) {
-    say("could not retarget the sleep hook at the drawer path");
-    process.exit(1);
-  }
-  await writeArch(TARGET_HOOK, hookSource, 0o755);
+  await writeArch(TARGET_HOOK, await Bun.file(HOOK).text(), 0o755);
   await inArchSoft("systemctl", "enable", "hibernate-mark-clear.service");
   say("installed hibernate-mark, the clear service and the sleep hook in the target");
 
@@ -87,8 +76,8 @@ async function up(): Promise<void> {
 /**
  * Installs the same script on the machine running the ladder.
  *
- * The host half is skipped when the drawer's other OS is not what we are
- * booted into: there is no second side to label. It also backs up anything it
+ * The host half is skipped when this is not the other OS's home: there is no
+ * second side to label. It also backs up anything it
  * replaces, and skips the backup when one already exists, so a second `up`
  * cannot overwrite the original with our own copy.
  */

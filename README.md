@@ -5,7 +5,9 @@ My dotfiles, plus `sensible-bootstrap/`: the ladder that takes a fresh Arch inst
 ## sensible-bootstrap
 
 - Small reversible steps, one Bun/TypeScript file each, one verb: `up` or `down`.
-- `bun run run.ts up` runs them in order, stops at the first failure. `plan` shows a range without running it.
+- `bun run run.ts up` runs them in order, stops at the first failure.
+- `plan` shows a range without running it; `--only <step>` runs exactly one.
+- `--ladder <dir>` runs another ladder directory. No recursion.
 - Idempotent on `up`, exact on `down`.
 - Depends on nothing outside itself — assets come from `files/`, never from another installed OS.
 - `verify.sh` is read-only and safe from either side.
@@ -55,7 +57,7 @@ sensible-bootstrap/
 
 - CMU Serif (33 `.otf`) is the only binary committed.
 - `files/wallpapers/` is committed, its contents are not — the mechanism ships, not the images.
-- Crossover tools read `DRAWER_*` via `opt()`, never `req()`, so a single-boot machine does not die.
+- Crossover steps read their optional keys via `opt()`, never `req()`, so a single-boot machine does not die.
 
 ## Gotchas
 

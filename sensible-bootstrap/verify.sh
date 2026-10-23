@@ -52,9 +52,6 @@ ESP_UUID="$(env_get ESP_UUID)" || ESP_UUID=""
 ARCH_USER="$(env_get ARCH_USER)" || ARCH_USER=shan
 ARCH_UID_EXPECT="$(env_get ARCH_UID)" || ARCH_UID_EXPECT=1000
 KERNEL="$(env_get KERNEL)" || KERNEL=linux-zen
-# Optional: only dualboot-utils/ reads these, and all may be unset.
-DRAWER_UUID="$(env_get DRAWER_UUID)" || DRAWER_UUID=""
-DRAWER_MOUNT="$(env_get DRAWER_MOUNT)" || DRAWER_MOUNT=/mnt/drawer
 
 HOST_OS="$(sed -n 's/^ID=//p' /etc/os-release 2>/dev/null | tr -d '"' | head -1)"
 TARGET=""          # "" when not mounted, else the path to operate on
@@ -169,16 +166,6 @@ if [ "$IN_TARGET" != 0 ]; then
             ok "fstab has the @snapshots entry"
         else
             note "fstab has no @snapshots entry (180-snapper.ts up adds it)"
-        fi
-
-        if [ -n "$DRAWER_MOUNT" ] && grep -q " ${DRAWER_MOUNT} " "$fstab" 2>/dev/null; then
-            opts="$(grep " ${DRAWER_MOUNT} " "$fstab" | awk '{print $4}')"
-            case "$opts" in
-                *ro*|*" ro,"*) ok "drawer at $DRAWER_MOUNT is read-only in fstab" ;;
-                *) bad "drawer at $DRAWER_MOUNT is NOT read-only in fstab ($opts)" ;;
-            esac
-        else
-            note "no drawer entry in fstab (dualboot-utils/drawer-mount.ts up)"
         fi
     else
         bad "no /etc/fstab at $fstab"
@@ -574,46 +561,29 @@ else
     fi
 fi
 
-# --- 8. dual boot (drawer and hibernation marker) --------------------------
-# Nothing in the ladder itself needs any of this, so every branch here is
-# optional and reports as a warning when it is not configured.
+# --- 8. dual boot (hibernation marker) -------------------------------------
+# Nothing in the ladder itself needs this, so an absent install is a warning.
 head_ "dual boot (optional)"
 
-if [ -z "$DRAWER_UUID" ] || [ "$DRAWER_UUID" = "00000000-0000-0000-0000-000000000000" ]; then
-    note "no DRAWER_UUID in .env; single-boot machine, nothing to check"
+if [ -x "$(at /usr/local/bin/hibernate-mark)" ]; then
+    ok "hibernate-mark installed"
 else
-    if has_cmd findmnt && [ -n "$DRAWER_MOUNT" ]; then
-        if findmnt -rno TARGET "$DRAWER_MOUNT" >/dev/null 2>&1; then
-            opts="$(findmnt -rno OPTIONS "$DRAWER_MOUNT")"
-            case "$opts" in
-                *rw*) note "drawer is read-WRITE; systemctl stop drawer-rw to end the window" ;;
-                *) ok "drawer at $DRAWER_MOUNT is mounted read-only" ;;
-            esac
-        else
-            note "drawer not mounted (it automounts on first access)"
-        fi
-    fi
+    note "no hibernate-mark (dualboot-utils ladder: 20-hibernate-mark.ts up)"
+fi
 
-    # The guard is what stops a read-write window opening onto a filesystem
-    # belonging to a hibernated OS. Worth knowing if it is missing.
-    if [ -x "$(at /usr/local/bin/hibernate-mark)" ]; then
-        ok "hibernate-mark installed"
-    else
-        note "no hibernate-mark (dualboot-utils/hibernate-mark.ts up)"
-    fi
+if exists "$(at /etc/systemd/system/hibernate-mark-clear.service)"; then
+    ok "hibernate-mark-clear.service installed"
+else
+    note "no hibernate-mark-clear.service (20-hibernate-mark.ts up)"
+fi
 
-    if exists "$(at /etc/systemd/system/drawer-rw.service)"; then
-        ok "drawer-rw.service installed"
-    else
-        note "no drawer-rw.service (dualboot-utils/drawer-mount.ts up)"
-    fi
-
-    unit="$(at /usr/local/bin/hibernate-mark)"
-    if [ "$IN_TARGET" = 2 ] && [ -x "$unit" ]; then
-        "$unit" show >/dev/null 2>&1 \
-            && ok "hibernate-mark can read the boot entries" \
-            || note "hibernate-mark cannot find the ESP from here"
-    fi
+# Only meaningful from inside the target: it is the target's own copy that
+# reads that system's ESP, and the paths differ between the two installs.
+unit="$(at /usr/local/bin/hibernate-mark)"
+if [ "$IN_TARGET" = 2 ] && [ -x "$unit" ]; then
+    "$unit" show >/dev/null 2>&1 \
+        && ok "hibernate-mark can read the boot entries" \
+        || note "hibernate-mark cannot find the ESP from here"
 fi
 
 # --- summary --------------------------------------------------------------

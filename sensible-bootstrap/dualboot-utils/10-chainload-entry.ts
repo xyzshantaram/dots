@@ -14,10 +14,9 @@
  *
  * Nothing here is installed by default: this step is skipped entirely when the
  * other OS's EFI directory is absent, so a single-boot machine sees no error.
- * Set DRAWER_OS_LABEL to change how the entry is titled.
+ * Set OTHER_OS_LABEL to change how the entry is titled.
  */
 import { $ } from "bun";
-import process from "node:process";
 import {
   ESP_MOUNT, ROOT_MNT, main, needMount, opt, removeArch, say, writeArch,
 } from "../lib.ts";

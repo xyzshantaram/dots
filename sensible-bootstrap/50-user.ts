@@ -8,10 +8,10 @@
  * revisit: 2026-12-21
  * ---
  *
- * ARCH_UID 1000 is the convention for the first real account, and it is also
- * the number another distro's /home will have been recorded under. Matching it
- * is what makes a read-only drawer onto such a home readable without uid
- * remapping. Nothing is shared: /home/$ARCH_USER stays its own directory.
+ * ARCH_UID 1000 is the convention for the first real account. It also matches
+ * the uid a second install would record on a shared /home, so that account's
+ * files stay owned by it from either system, with no remapping.
+ * /home/$ARCH_USER is its own directory.
  */
 import process from "node:process";
 import {

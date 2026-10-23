@@ -43,12 +43,13 @@ in JavaScript, so the verbs are `up`/`down`.
 ```
 sudo ./setup-bun.sh                     # once: puts bun where sudo can see it
 cp .env.example .env                    # then fill in the UUIDs
-sudo bun run run.ts list                # see the ladder
+bun run run.ts list                     # see the ladder
 sudo bun run run.ts up                  # everything, in order
-sudo bun run run.ts up 40-packages      # resume from a step
+sudo bun run run.ts up 40-packages      # resume from a step to the end
+sudo bun run run.ts up --only 70-keyd   # or exactly one step
 sudo bun run run.ts down 150-kernel-sync 12-esp-efi   # unwind a range backwards
-sudo bun run 70-keyd.ts up              # or run one step alone
-sudo bun run dualboot-utils/drawer-mount.ts up   # optional, only for dual boot
+
+sudo bun run run.ts --ladder dualboot-utils up   # the optional two-system ladder
 ```
 
 `run.ts` stops at the first failure and prints the step to re-run. Every step
@@ -88,11 +89,10 @@ Progress goes to stderr, so stdout stays pipeable.
 | `170-dictation` | FastFlowLM, Voxtype, the preview strip, the Pause-key toggle |
 | `180-snapper` | `@snapshots` at `/.snapshots`, snapper + snap-pac, post-bootstrap snapshot |
 
-Four moved out, because they only exist when two systems share a disk:
-`125-fh-mount` and `127-fh-rw` became `dualboot-utils/drawer-mount` plus a
-systemd unit, `140-fedora-entry` became `chainload-entry`, and `160-boot-marker`
-plus `fedora-side.sh` became one `hibernate-mark` step. See that directory's
-README.
+Two moved out, because they only exist when two systems share a disk:
+`140-fedora-entry` became `10-chainload-entry`, and `160-boot-marker` plus
+`fedora-side.sh` became one `20-hibernate-mark` step. They are a second ladder,
+`run.ts --ladder dualboot-utils`. See that directory's README.
 
 ### Checking it
 
@@ -252,7 +252,7 @@ system's swap unit, which discards the image. That already happened once here:
 a reboot landed on Arch because `arch.conf` was the default entry, and the other
 system's hibernation state was gone.
 
-The mitigation is `dualboot-utils/hibernate-mark.ts`, which labels the
+The mitigation is `dualboot-utils/20-hibernate-mark.ts`, which labels the
 hibernating entry `(HIBERNATED)` and sets it as the **one-shot** boot default,
 so the menu shows who holds an image and points at that entry. It is a sign,
 not a lock: picking the other entry by hand still costs you the session.
@@ -260,8 +260,8 @@ not a lock: picking the other entry by hand still costs you the session.
 The only way to make the collision impossible is to stop sharing — one side
 loses hibernation and lives on zram alone.
 
-The read-write half of the same hazard, and how it is now enforced rather than
-remembered, is covered in `dualboot-utils/README.md`.
+Both systems mount the shared home at `/home`, so there is no second mount to
+gate: the account whose uid is 1000 owns its own files from either side.
 
 ## ESP mountpoint: moved to `/efi`
 
@@ -505,7 +505,7 @@ Every step's `down` is exact:
 `dualboot-utils/` has its own table in its README.
 
 Anything that edits a file it did not create leaves a `*.pam-save`,
-`*.keyd-save`, `*.hib-save`, `*.pre-esp-sync`, `*.drawer-save` or
+`*.keyd-save`, `*.hib-save`, `*.pre-esp-sync` or
 `*.sensible-bootstrap-save` sibling. Those are gitignored.
 
 Two `down`s deliberately under-delete, because the obvious version destroys
