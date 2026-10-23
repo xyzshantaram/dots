@@ -18,7 +18,7 @@ Both installation modes apply, as everywhere else: `ROOT_MNT` in `.env` or
 `--live` decides whether it writes into a mounted target root or into the running
 system.
 
-- `10-graphics` — ImageMagick, GIMP, Inkscape.
+- `10-graphics` — ImageMagick, GIMP, Inkscape and optipng.
 - `20-media` — Audacity, Kdenlive.
 - `30-office` — OnlyOffice, built from the AUR.
 - `40-typesetting` — Typst and its language service.
@@ -30,6 +30,7 @@ system.
 | `magick` | the repositories | `imagemagick` |
 | GIMP | the repositories | `gimp` |
 | Inkscape | the repositories | `inkscape` |
+| `optipng` | the repositories | `optipng` |
 | Audacity | the repositories | `audacity` |
 | Kdenlive | the repositories | `kdenlive` |
 | OnlyOffice | the AUR, built by `aurInstall` | `onlyoffice-bin` |

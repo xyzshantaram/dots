@@ -1,21 +1,25 @@
 /**
  * ---
  * script: 10-graphics.ts
- * desc: Installs the image and vector tools: ImageMagick, GIMP and Inkscape.
+ * desc: Installs the image and vector tools: ImageMagick, GIMP, Inkscape and optipng.
  * needs: 40-packages.ts up in the main ladder, and network
- * up: pacman -S --needed imagemagick gimp inkscape
- * down: pacman -Rns over the same three, ignoring failures
+ * up: pacman -S --needed imagemagick gimp inkscape optipng
+ * down: pacman -Rns over the same four, ignoring failures
  * revisit: 2026-12-21
  * ---
  *
  * ImageMagick is the one here that is not only a GUI application: `magick`
  * converts, resizes and reports on an image from a script, which is what makes
  * it useful to a ladder or an agent rather than only to a person.
+ *
+ * optipng is the lossless last step of that: it rewrites a PNG smaller without
+ * touching a pixel, which is what a screenshot or an exported asset wants
+ * before it goes anywhere.
  */
 import process from "node:process";
 import { inArch, main, needMount, say } from "../lib.ts";
 
-const PACMAN = ["imagemagick", "gimp", "inkscape"];
+const PACMAN = ["imagemagick", "gimp", "inkscape", "optipng"];
 
 async function up(): Promise<void> {
   await needMount();

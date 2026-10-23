@@ -69,7 +69,10 @@ Singleton {
     // Gaps are 8 in niri's layout; the bar uses the same number so its margin
     // against the screen edge and the gap between windows agree.
     readonly property int gap:        8
-    readonly property int barHeight:  32
+    // Tall enough for the largest pill plus its padding: the clock sets the
+    // floor at fontSizeLarge, and the half-gap margins above and below take 8.
+    // At 32 the pills were clipped along their bottom edge.
+    readonly property int barHeight:  36
     readonly property int pillRadius: 999   // fully rounded
     readonly property int radiusCard: 18
     readonly property int radiusSmall: 12
