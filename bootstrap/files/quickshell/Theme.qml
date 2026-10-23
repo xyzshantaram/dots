@@ -28,14 +28,6 @@ Singleton {
     readonly property color alertBright: "#EC9E24"
     readonly property color alertHot:    "#F8D035"
 
-    // --- fixed metric colours ---------------------------------------------
-    // CPU, memory and disk are deliberately outside the calm/alert ramp: they
-    // are three things to read at a glance, and a shared ramp would make them
-    // three shades of the same answer. Blue, white and yellow as asked.
-    readonly property color metricCpu:  "#F8D035"
-    readonly property color metricMem:  "#F0EFF3"
-    readonly property color metricDisk: "#584BB4"
-
     // --- recording --------------------------------------------------------
     // The one red in the shell, for the recording dot. Red rather than the
     // alert orange because "we are recording you" is not on the attention
@@ -77,6 +69,10 @@ Singleton {
     // of the em box, so a glyph set to iconSize draws visibly smaller than an
     // image set to it. This is the same apparent size, not a bigger one.
     readonly property int glyphSize: 22
+
+    // Room below the strip for the tooltip. A two-line tooltip plus the gap
+    // between it and the bar, with a little to spare.
+    readonly property int tooltipHeadroom: 44
 
     // --- geometry ---------------------------------------------------------
     // Gaps are 8 in niri's layout; the bar uses the same number so its margin

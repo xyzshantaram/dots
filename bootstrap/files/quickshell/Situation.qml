@@ -1,7 +1,6 @@
 pragma Singleton
 
 import Quickshell
-import Quickshell.Io
 import QtQuick
 
 // One question, asked everywhere: does this need attention?
@@ -15,9 +14,6 @@ import QtQuick
 // between the two ends would cut the corner through a muddy brown the moment
 // either end moved, and the forward walk is the shorter arc here anyway.
 Singleton {
-    // Named, because the evening-clock block below references its own
-    // properties and its file watcher by it.
-    id: root
     readonly property color calm:  Theme.calm
     readonly property color alert: Theme.alert
 
@@ -69,48 +65,69 @@ Singleton {
         return muted ? 1 : 0
     }
 
-    /** Load, for anything measured in percent where high is the bad end. */
-    function loadScore(percent, warn = 70, critical = 90): real {
+    /**
+     * Load, for anything measured in percent where high is the bad end.
+     *
+     * The defaults are this machine's working range, not a generic one. A busy
+     * day sits around 30-40% of memory and CPU rarely pushes past the same, so
+     * a 70/90 ramp would hold both icons white through the whole day and say
+     * nothing at all. 20 to 50 spreads the range that actually happens across
+     * the middle of the blend.
+     *
+     * Disk is the odd one out: it lives at whatever it lives at and climbs
+     * slowly, so a threshold tuned to CPU will find it permanently tinted.
+     */
+    function loadScore(percent, warn = 20, critical = 50): real {
         return ramp(percent, warn, critical)
     }
 
     // --- the evening clock -------------------------------------------------
 
     /**
-     * Where the clock's warmth counts from: 19:00 today, or yesterday's if it
-     * is already past midnight.
+     * Evening runs from 22:00 to 09:00, and the clock walks from white at the
+     * start of it to orange at the end. Outside that window it is white.
      *
-     * Without that second case, opening the shell at 01:00 would put the base
-     * six hours in the future, the score at zero, and the clock back to white —
-     * a jump backwards rather than a ramp.
+     * One rule and no state: the colour is a function of the wall clock, so a
+     * shell restarted at 03:00 looks exactly like one that has been running
+     * since 22:00, and there is nothing to reset.
      */
-    property date clockBase: defaultClockBase()
+    readonly property int eveningStartHour: 22
+    readonly property int eveningEndHour: 9
 
-    function defaultClockBase(): date {
-        const d = new Date()
-        d.setHours(19, 0, 0, 0)
-        if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1)
-        return d
-    }
+    /**
+     * How the fade is weighted, as an exponent on the progress.
+     *
+     * 0.5 is a square root: the colour is most of the way to orange by the time
+     * the night is half over, rather than halfway between the two. 1.0 restores
+     * the even fade; lower gets orange sooner.
+     */
+    readonly property real eveningWeight: 0.5
 
-    /** Hours from the base to full warmth. */
-    readonly property int clockRampHours: 6
-
-    /** 0 at the base, 1 six hours later, and flat either side. */
+    /** 0 at 22:00, 1 at 09:00, and flat white for the rest of the day. */
     function clockTint(now): real {
-        const from = clockBase.getTime()
-        return ramp(now.getTime(), from, from + clockRampHours * 3600 * 1000)
+        const hour = now.getHours()
+        const afterMidnight = hour < eveningEndHour
+        if (!afterMidnight && hour < eveningStartHour) return 0
+
+        // The window straddles midnight, so the base is either tonight's 22:00
+        // or last night's. Eleven hours either way, which is why the length is
+        // computed rather than written down twice.
+        const from = new Date(now)
+        if (afterMidnight) from.setDate(from.getDate() - 1)
+        from.setHours(eveningStartHour, 0, 0, 0)
+
+        const hours = 24 - eveningStartHour + eveningEndHour
+        return ramp(now.getTime(), from.getTime(), from.getTime() + hours * 3600 * 1000)
     }
 
     /**
-     * White by day, walking to the alert orange across the evening.
+     * White to the alert orange, by an already-computed 0…1 score.
      *
-     * Deliberately not blend(): that ramp means "needs attention" and runs
-     * from purple, and the time of day should not be mistakable for a
-     * notification.
+     * Shared, so the evening clock and a hot CPU come out the same family of
+     * colour rather than two blends that drift apart the first time one of them
+     * is adjusted.
      */
-    function clockColour(now): color {
-        const t = clockTint(now)
+    function warmth(t): color {
         const a = Theme.text
         const b = Theme.alert
         return Qt.rgba(
@@ -120,27 +137,24 @@ Singleton {
             1)
     }
 
-    /** Start the evening again from now. */
-    function resetClockTint(): void {
-        clockBase = new Date()
+    /**
+     * The colour for a load given as 0…1, white at rest and orange under load.
+     *
+     * Takes a fraction where loadScore wants a percentage, because every
+     * sampler in the shell measures in fractions; converting at the edge here
+     * beats a caller that forgets and reads as permanently calm.
+     */
+    function loadColour(value): color {
+        return warmth(loadScore(value * 100))
     }
 
     /**
-     * `bun reset-clock-tint` touches this file, and that is the whole protocol:
-     * a running shell sees the change and restarts the ramp. A watched file
-     * rather than Quickshell's IPC because it needs nothing registered with
-     * anything, which also means the command is harmless when no shell is up.
+     * White, walking to the alert orange across the night.
      *
-     * The initial load is deliberately unhandled. A file left over from an
-     * earlier reset should not decide what this session starts at — only a
-     * *change* to it means anything.
+     * Deliberately not blend(): that ramp means "needs attention" and runs from
+     * purple, and the time of day should not be mistakable for a notification.
      */
-    readonly property string clockResetFile:
-        `${Quickshell.env("HOME")}/.cache/dots/clock-tint-reset`
-
-    FileView {
-        path: root.clockResetFile
-        watchChanges: true
-        onFileChanged: root.resetClockTint()
+    function clockColour(now): color {
+        return warmth(Math.pow(clockTint(now), eveningWeight))
     }
 }

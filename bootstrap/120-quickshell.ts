@@ -49,12 +49,6 @@ async function up(): Promise<void> {
 
   say("110-niri.ts spawns `qs` at startup, which reads this directory");
   say(`to draw it now, without logging out: qs -p ${DEST}`);
-
-  // The shell watches this file to know when to restart the evening clock
-  // tint, and it has to exist before it can be watched. `bun
-  // reset-clock-tint` is what touches it afterwards.
-  await writeUserFile(`/home/${ARCH_USER}/.cache/dots/clock-tint-reset`, "");
-  say("seeded the clock tint reset file");
 }
 
 async function down(): Promise<void> {

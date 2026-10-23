@@ -486,10 +486,25 @@ export async function writeArch(
   owner: { uid: number; gid: number } = { uid: 0, gid: 0 },
 ): Promise<string> {
   const dest = at(rel);
-  await mkdir(dirname(dest), { recursive: true });
+  const parent = dirname(dest);
+
+  // Directories this call is about to create, before it creates them.
+  //
+  // mkdir -p makes every missing ancestor as root, and chowning only the file
+  // leaves them root-owned — so the account cannot then write its own config,
+  // which is what happened to ~/.config/quickshell: `qs` could read it, and the
+  // user could not update it. Only the directories this call actually creates
+  // are chowned; anything above them already existed and is not ours to touch.
+  const created: string[] = [];
+  for (let dir = parent; !existsSync(dir); dir = dirname(dir)) created.push(dir);
+
+  await mkdir(parent, { recursive: true });
   await Bun.write(dest, content);
   await $`chmod ${mode.toString(8)} ${dest}`.quiet();
   await $`chown ${owner.uid}:${owner.gid} ${dest}`.quiet();
+  for (const dir of created) {
+    await $`chown ${owner.uid}:${owner.gid} ${dir}`.quiet();
+  }
   return dest;
 }
 
