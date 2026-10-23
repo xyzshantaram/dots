@@ -1,4 +1,4 @@
-# sdks
+# software-dev
 
 Optional. The software-development toolchain, kept out of the main ladder because
 none of it is needed for a working niri session: the main ladder builds a
@@ -8,9 +8,9 @@ depends on this**, and it can be removed without touching anything else.
 It is its own ladder, run with the same runner from the repo root:
 
 ```
-bun run ladder sdks list
-bun run ladder sdks plan
-bun run ladder sdks up
+bun run ladder software-dev list
+bun run ladder software-dev plan
+bun run ladder software-dev up
 ```
 
 Both installation modes apply, as everywhere else: `ROOT_MNT` in `.env` or
@@ -18,7 +18,7 @@ Both installation modes apply, as everywhere else: `ROOT_MNT` in `.env` or
 system.
 
 - `10-toolchain` — cmake, unzip, autoconf; fnm with the latest Node LTS, pnpm
-  from that npm, and Command Code from pnpm; rustup; and Zed.
+  from that npm, and Command Code from pnpm; rustup; Zed; and uv for Python.
 - `20-git` — the git presentation config: the `stat` and `https-to-ssh` aliases,
   delta as the pager with its colours, and the global ignore file; plus the
   `git-delta` and `bat` packages, and identity and SSH commit signing from
@@ -28,7 +28,7 @@ system.
 
 | tool | from | lives in |
 | --- | --- | --- |
-| `cmake`, `unzip`, `autoconf`, `zed` | the repositories | `/usr` |
+| `cmake`, `unzip`, `autoconf`, `zed`, `uv` | the repositories | `/usr` |
 | `fnm` | the repositories | `/usr/bin/fnm` |
 | Node LTS | `fnm install --lts` | `~/.local/share/fnm` |
 | `pnpm` | `npm install -g`, using the fnm node | `~/.local/share/fnm/aliases/default/bin` |
@@ -45,10 +45,13 @@ paired.
 ## PATH
 
 A fish `conf.d` snippet is written to
-`~/.config/fish/conf.d/sdks.fish`, prepending `~/.cargo/bin` and
-`~/.local/share/pnpm` and sourcing `fnm env --use-on-cd --shell fish`. It is a
+`~/.config/fish/conf.d/software-dev.fish`, prepending `~/.cargo/bin`,
+`~/.local/bin` — where uv puts the shims for `uv tool install` — and
+`~/.local/share/pnpm`, and sourcing `fnm env --use-on-cd --shell fish`. It is a
 separate file rather than an edit to `config.fish`, because `90-fish` in the main
-ladder owns that file; `down` deletes the snippet and nothing else.
+ladder owns that file; `down` deletes the snippet and nothing else. The snippet
+was called `sdks.fish` before the ladder was renamed, and `up` removes that old
+file if it is still there.
 
 Open a new shell afterwards. The step itself does not touch the running one.
 

@@ -28,7 +28,7 @@
  * has the failure verbatim.
  *
  * Rust comes from rustup, not from a distro `rust` package, for the reason the
- * sdks ladder gives: the toolchain is the account's, and makepkg could not see
+ * software-dev ladder gives: the toolchain is the account's, and makepkg could not see
  * it in makedepends anyway. ensureRustup() is what makes that true.
  *
  * Runs before 110-niri.ts on purpose: config.kdl binds `TouchpadSwipe`, and

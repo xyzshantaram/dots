@@ -1,0 +1,5 @@
+// Singleton declarations for this directory. QML requires a qmldir for a
+// singleton to be usable by name; without it, Theme and Situation are just two
+// more QML files nothing can import.
+singleton Theme 1.0 Theme.qml
+singleton Situation 1.0 Situation.qml

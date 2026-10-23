@@ -630,7 +630,7 @@ if [ "$IN_TARGET" = 2 ] && [ -x "$unit" ]; then
 fi
 
 # --- 9. developer toolchain (optional) --------------------------------------
-# The sdks ladder is its own thing; an absent install is a warning, not a fault.
+# The software-dev ladder is its own thing; an absent install is a warning, not a fault.
 head_ "developer toolchain (optional)"
 
 for f in \
@@ -641,7 +641,7 @@ for f in \
     "/home/$ARCH_USER/.local/share/pnpm"
 do
     exists "$(at "$f")" && ok "present: $f" \
-                        || note "missing: $f (sdks ladder: 10-toolchain up)"
+                        || note "missing: $f (software-dev ladder: 10-toolchain up)"
 done
 
 # --- summary --------------------------------------------------------------

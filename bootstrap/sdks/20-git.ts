@@ -42,7 +42,7 @@ const SRC = `${import.meta.dir}/../files/git`;
 const PACMAN = ["git-delta", "bat"];
 
 /** Staged inside the target, so `git` can read it in either mode. */
-const STAGE = "/var/tmp/sdks-git-config";
+const STAGE = "/var/tmp/software-dev-git-config";
 
 /**
  * The [user], [gpg], [commit] and [tag] sections, from .env.
@@ -94,8 +94,8 @@ async function up(): Promise<void> {
   }
   await removeArch(STAGE);
 
-  await backupOnce(CONFIG, ".sdks-save");
-  await backupOnce(IGNORE, ".sdks-save");
+  await backupOnce(CONFIG, ".software-dev-save");
+  await backupOnce(IGNORE, ".software-dev-save");
   await writeUserFile(CONFIG, content);
   await writeUserFile(IGNORE, await Bun.file(`${SRC}/ignore`).text());
   say(`wrote ${CONFIG}`);
@@ -124,7 +124,7 @@ async function down(): Promise<void> {
   await needMount();
 
   for (const [rel, name] of [[CONFIG, "config"], [IGNORE, "ignore"]] as const) {
-    if (await restoreBackup(rel, ".sdks-save")) {
+    if (await restoreBackup(rel, ".software-dev-save")) {
       say(`restored the original ~/.config/git/${name}`);
     } else {
       await removeArch(rel);

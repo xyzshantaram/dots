@@ -1,7 +1,7 @@
 /**
  * ---
  * script: 10-toolchain.ts
- * desc: Installs the software-development toolchain for the account: cmake, unzip and autoconf; fnm carrying the latest Node LTS, pnpm built from that npm, and Command Code from pnpm; rustup; and Zed.
+ * desc: Installs the software-development toolchain for the account: cmake, unzip and autoconf; fnm carrying the latest Node LTS, pnpm built from that npm, and Command Code from pnpm; rustup; Zed; and uv for Python.
  * needs: an installed Arch system — the account (50-user.ts) and base-devel (40-packages.ts) — and network
  * up: pacman-installs cmake/unzip/autoconf/fnm/zed, then as ARCH_USER runs fnm install --lts, npm install -g pnpm, pnpm add -g command-code and the rustup installer; writes the fish conf.d that puts them on PATH
  * down: removes the conf.d, the global npm and pnpm packages, rustup, fnm's data directory, pnpm's global directory and the packages
@@ -12,8 +12,8 @@
  * session: the main ladder builds a session, this one builds somewhere to write
  * code in it. It is optional, and the main ladder never depends on it.
  *
- *   bun run ladder sdks up
- *   bun run ladder sdks --only 10-toolchain up
+ *   bun run ladder software-dev up
+ *   bun run ladder software-dev --only 10-toolchain up
  *
  * Rust comes from rustup, deliberately, and nothing here installs a distro
  * `rust`. rustup is also what 105-niri-gestures.ts builds the patched niri with;
@@ -50,14 +50,21 @@ const PNPM_HOME = `${HOME}/.local/share/pnpm`;
 /** rustup's default: the toolchain and the shims live together. */
 const CARGO_BIN = `${HOME}/.cargo/bin`;
 
-const FISH_CONF = `${HOME}/.config/fish/conf.d/sdks.fish`;
+const FISH_CONF = `${HOME}/.config/fish/conf.d/software-dev.fish`;
+
+/** What that snippet was called before the ladder was renamed. Removed on up. */
+const FISH_CONF_OLD = `${HOME}/.config/fish/conf.d/sdks.fish`;
 
 /**
  * Packages from the repositories. autoconf is already in base-devel, and `--needed`
  * makes it a no-op; it is listed because this ladder's contract is "these are
  * installed", not "these were possibly already there".
+ *
+ * uv is the Python side: it resolves and installs without a python or pip of its
+ * own, and the shims for `uv tool install` land in ~/.local/bin, which the fish
+ * snippet below puts on PATH.
  */
-const PACMAN = ["cmake", "unzip", "autoconf", "fnm", "zed"];
+const PACMAN = ["cmake", "unzip", "autoconf", "fnm", "zed", "uv"];
 
 /** Installed with npm from the fnm node, then with pnpm. */
 const NPM_GLOBAL = ["pnpm"];
@@ -141,7 +148,7 @@ async function installCommandCode(): Promise<void> {
 async function installFishPath(): Promise<void> {
   await writeUserFile(
     FISH_CONF,
-    `# Developer toolchains, installed by the bootstrap sdks ladder.
+    `# Developer toolchains, installed by the bootstrap software-dev ladder.
 #
 # A conf.d snippet rather than config.fish, so removing this ladder does not
 # mean editing a file the main ladder owns.
@@ -149,6 +156,11 @@ async function installFishPath(): Promise<void> {
 # rustup
 if test -d $HOME/.cargo/bin
     fish_add_path --move --prepend $HOME/.cargo/bin
+end
+
+# Where uv puts the shims for `uv tool install`.
+if test -d $HOME/.local/bin
+    fish_add_path --move --prepend $HOME/.local/bin
 end
 
 # pnpm's global binaries. They live in $PNPM_HOME/bin, not $PNPM_HOME; pnpm
@@ -178,6 +190,10 @@ end
 
 async function up(): Promise<void> {
   await needMount();
+
+  // The snippet was named sdks.fish before the ladder was renamed. Removing the
+  // old one keeps the shell from sourcing two versions of the same PATH setup.
+  await removeArch(FISH_CONF_OLD);
 
   await installPackages();
   await installNode();

@@ -18,7 +18,10 @@ Environment=DICTATION_REAL_WTYPE=/usr/bin/wtype
 Environment=DICTATION_STRIP=%h/.local/share/dictation/bin/dictation-strip
 # The strip is a layer-shell surface; force Wayland even though DISPLAY is set.
 Environment=QT_QPA_PLATFORM=wayland
-ExecStart=%h/.local/bin/voxtype daemon
+# Voxtype comes from the AUR's voxtype-bin, which installs into /usr/bin — not
+# from the Fedora install's cargo directory under the account's home, which is
+# where this pointed and why the unit exited 203/EXEC on the first boot.
+ExecStart=/usr/bin/voxtype daemon
 Restart=on-failure
 RestartSec=2
 

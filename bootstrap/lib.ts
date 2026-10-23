@@ -231,7 +231,7 @@ export async function asUserSoft(...args: (string | number)[]) {
  * path to its cargo.
  *
  * Two callers want this: 105-niri-gestures.ts, which builds the patched niri and
- * deliberately does not use a distro rust package, and the sdks ladder, which
+ * deliberately does not use a distro rust package, and the software-dev ladder, which
  * installs the toolchain for the account's own use. Written once here so the two
  * cannot drift.
  *

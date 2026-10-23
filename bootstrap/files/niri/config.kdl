@@ -40,6 +40,17 @@ input {
 layout {
     gaps 8
 
+    // New windows open at half the output width, which is what makes Mod+F a
+    // visible toggle: it expands the column to full width and back. niri's
+    // stock config sets this to 0.5 too, and it was never copied here — so
+    // every window took the size it asked for instead, WezTerm asked for full
+    // width, and Mod+F had nothing left to expand.
+    //
+    // Stock also carries a window-rule forcing WezTerm to an empty
+    // default-column-width, to work around its initial-configure bug. That rule
+    // is deliberately absent: it is the behaviour this line exists to change.
+    default-column-width { proportion 0.5; }
+
     // The outline on the focused window. niri's default is a light blue
     // (#7fc8ff).
     focus-ring {

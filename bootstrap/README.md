@@ -55,7 +55,8 @@ bun run ladder down 150-kernel-sync 12-esp-efi   # unwind a range backwards
 
 bun run ladder up --live                # install into this system, not a target
 
-bun run ladder sdks up                  # the optional developer-toolchain ladder
+bun run ladder software-dev up          # the optional developer-toolchain ladder
+bun run ladder creative up              # the optional creative-tools ladder
 
 bun run ladder dualboot-utils up        # the optional two-system ladder
 ```
@@ -135,11 +136,15 @@ Two moved out, because they only exist when two systems share a disk:
 `fedora-side.sh` became one `20-hibernate-mark` step. They are a second ladder,
 `run.ts --ladder dualboot-utils`. See that directory's README.
 
-The developer toolchain is a third ladder, [`sdks/`](sdks/README.md): cmake,
+The developer toolchain is a third ladder, [`software-dev/`](software-dev/README.md): cmake,
 unzip, autoconf, fnm carrying the Node LTS, pnpm, Command Code, rustup and Zed.
 None of it is needed for a session, so it is optional — but one main-ladder step
 does care about rustup: `105-niri-gestures` builds the patched niri with it, and
-installs it itself when the sdks ladder has not run.
+installs it itself when the software-dev ladder has not run.
+
+A fourth, [`creative/`](creative/README.md), is ImageMagick, GIMP and Inkscape;
+Audacity and Kdenlive; OnlyOffice from the AUR; and Typst with its language
+service. Also optional, and removable on its own.
 
 ### Checking it
 

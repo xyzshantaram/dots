@@ -10,7 +10,8 @@ My dotfiles, plus `bootstrap/`: the ladder that takes a fresh Arch install to a 
 - `plan` shows a range without running it; `--only <step>` runs exactly one.
 - `ROOT_MNT=/` in `.env` (or `--live`) points the whole ladder at the running system instead of a mounted target root.
 - `bun run ladder dualboot-utils up` runs another ladder directory. No recursion.
-- `bun run ladder sdks up` is a separate, optional ladder: the developer toolchain (Node through fnm, pnpm, Command Code, rustup, Zed).
+- `bun run ladder software-dev up` is a separate, optional ladder: the developer toolchain (Node through fnm, pnpm, Command Code, rustup, Zed, uv).
+- `bun run ladder creative up` is another optional one: ImageMagick, GIMP, Inkscape, Audacity, Kdenlive, OnlyOffice and Typst.
 - Idempotent on `up`, exact on `down`.
 - Depends on nothing outside itself — assets come from `files/`, never from another installed OS.
 - `verify.sh` is read-only and safe from either side.
@@ -21,6 +22,8 @@ package.json      `bun run ladder`, `bun run verify`
 .env              machine values, shared by both ladders (.env.example is the template)
 bootstrap/
   dualboot-utils/   chainload entry, hibernation marker — only when two OSes share a disk
+  software-dev/     developer toolchain — optional
+  creative/         image, audio, video, office, typesetting — optional
   files/            vendored assets
   verify.sh
 ```

@@ -21,8 +21,12 @@ const BASE = [
  * initramfs. Without these two the boot entries written by 150-kernel-sync
  * point at files that do not exist, and systemd-boot refuses the entry.
  * linux-zen is usually already there from pacstrap; --needed makes it a no-op.
+ *
+ * efibootmgr is neither kernel nor microcode. systemd-boot manages its own
+ * entries through bootctl, so this is here to read and repair the NVRAM entry
+ * list from the installed system — the way back in when the boot menu is wrong.
  */
-const KERNEL = ["linux-zen", "amd-ucode"];
+const KERNEL = ["linux-zen", "amd-ucode", "efibootmgr"];
 
 /**
  * The launcher (vicinae) is not here: it is AUR-only, so 110-niri.ts installs
@@ -34,8 +38,15 @@ const DESKTOP = [
   "nautilus", "papers", "gedit",
 ];
 
+/**
+ * Hardware access. ddcutil is what sets brightness on an external monitor, over
+ * DDC/CI: there is no sysfs node for it the way there is for the internal
+ * panel. It talks to /dev/i2c-*, so it also wants the i2c-dev module loaded and
+ * write access to those nodes, which this ladder does not arrange — expect to
+ * add the account to a group or a udev rule before it works.
+ */
 const HW = [
-  "keyd", "brightnessctl", "playerctl", "fprintd", "alsa-utils",
+  "keyd", "brightnessctl", "playerctl", "fprintd", "alsa-utils", "ddcutil",
   "linux-firmware-amdgpu", "linux-firmware-other",
 ];
 
@@ -54,7 +65,12 @@ const IDLE = ["swayidle"];
  */
 const STORAGE = ["udisks2", "udiskie"];
 
-const APPS = ["firefox", "podman"];
+/**
+ * General applications. ffmpeg sits here rather than with the artistic ladder's
+ * audio and video tools, because it is useful on its own whether or not any of
+ * those are installed.
+ */
+const APPS = ["firefox", "podman", "ffmpeg"];
 
 /**
  * Dictation. fastflowlm 1.0.9 is in extra and newer than the AUR's
