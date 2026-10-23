@@ -21,7 +21,7 @@ system.
 - `10-graphics` — ImageMagick, GIMP, Inkscape and optipng.
 - `20-media` — Audacity, Kdenlive.
 - `30-office` — OnlyOffice, built from the AUR.
-- `40-typesetting` — Typst and its language service.
+- `40-typesetting` — Typst, its language service, and fonttools.
 
 ## What it installs, and where
 
@@ -35,6 +35,7 @@ system.
 | Kdenlive | the repositories | `kdenlive` |
 | OnlyOffice | the AUR, built by `aurInstall` | `onlyoffice-bin` |
 | `typst`, `tinymist` | the repositories | `typst`, `tinymist` |
+| `fonttools` | the repositories | `python-fonttools` |
 
 `ffmpeg` is deliberately not here. It is installed by the main ladder's
 `40-packages`, because it is useful on its own and not only as something

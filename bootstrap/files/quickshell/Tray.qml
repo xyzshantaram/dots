@@ -27,7 +27,7 @@ Pill {
     readonly property string tip: "System tray"
 
     Item {
-        // The glyph's own box, so Theme.glyphOffsetX can move the ink inside it
+        // The glyph's own box, so the nudge below moves the ink inside it
         // without the pill moving with it.
         implicitWidth: glyph.implicitWidth
         implicitHeight: glyph.implicitHeight
@@ -47,9 +47,17 @@ Pill {
             horizontalAlignment: Text.AlignHCenter
 
             anchors.centerIn: parent
-            anchors.horizontalCenterOffset: Theme.glyphOffsetX
+            anchors.horizontalCenterOffset: root.glyphNudgeX
         }
     }
+
+    /**
+     * How far this glyph's ink sits from where its box says it should.
+     *
+     * Per glyph, not per theme: each one is drawn differently inside its own
+     * advance, and a number that centres one of them pushes another off.
+     */
+    property int glyphNudgeX: 3
 
     MouseArea {
         anchors.fill: parent

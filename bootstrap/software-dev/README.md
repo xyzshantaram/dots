@@ -18,7 +18,8 @@ Both installation modes apply, as everywhere else: `ROOT_MNT` in `.env` or
 system.
 
 - `10-toolchain` — cmake, unzip, autoconf; fnm with the latest Node LTS, pnpm
-  from that npm, and Command Code from pnpm; rustup; Zed; and uv for Python.
+  from that npm, and Command Code from pnpm; rustup; Zed; uv for Python; and
+  ripgrep, fd and just.
 - `20-git` — the git presentation config: the `stat` and `https-to-ssh` aliases,
   delta as the pager with its colours, and the global ignore file; plus the
   `git-delta` and `bat` packages, and identity and SSH commit signing from
@@ -28,7 +29,7 @@ system.
 
 | tool | from | lives in |
 | --- | --- | --- |
-| `cmake`, `unzip`, `autoconf`, `zed`, `uv` | the repositories | `/usr` |
+| `cmake`, `unzip`, `autoconf`, `zed`, `uv`, `ripgrep`, `fd`, `just` | the repositories | `/usr` |
 | `fnm` | the repositories | `/usr/bin/fnm` |
 | Node LTS | `fnm install --lts` | `~/.local/share/fnm` |
 | `pnpm` | `npm install -g`, using the fnm node | `~/.local/share/fnm/aliases/default/bin` |

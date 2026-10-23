@@ -91,6 +91,7 @@ Scope {
 
                 // Named, because the bar draws its dropdown.
                 Tray { id: tray }
+                CapsLock {}
             }
 
             // The one tooltip, drawn under the strip at whichever widget asked

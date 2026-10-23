@@ -73,16 +73,6 @@ Singleton {
     // 30px pill, which is why this can be larger than the text and still fit.
     readonly property int glyphSize: 24
 
-    // Some nerd-font glyphs are drawn asymmetrically inside their own box. The
-    // puzzle outline measures exactly two-thirds of an advance wide, flush on
-    // both sides, and still reads lopsided because its tab is on one side — no
-    // amount of layout will centre a shape like that. This nudges the ink
-    // without moving the pill around it.
-    //
-    // 3 by eye. The ink draws a few pixels left of where its advance says it
-    // should be, which is the glyph's own business and not the layout's.
-    readonly property int glyphOffsetX: 3
-
     // Room below the strip for the tooltip, and for the tray's dropdown, which
     // is taller. One number serves both: the window is as tall as the tallest
     // thing that might be drawn in it. Roughly six tray entries and their

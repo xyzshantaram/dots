@@ -63,8 +63,12 @@ const FISH_CONF_OLD = `${HOME}/.config/fish/conf.d/sdks.fish`;
  * uv is the Python side: it resolves and installs without a python or pip of its
  * own, and the shims for `uv tool install` land in ~/.local/bin, which the fish
  * snippet below puts on PATH.
+ *
+ * ripgrep, fd and just are the everyday three: search file contents, find files,
+ * and run the commands a project declares. All three are one binary with no
+ * runtime of their own.
  */
-const PACMAN = ["cmake", "unzip", "autoconf", "fnm", "zed", "uv"];
+const PACMAN = ["cmake", "unzip", "autoconf", "fnm", "zed", "uv", "ripgrep", "fd", "just"];
 
 /** Installed with npm from the fnm node, then with pnpm. */
 const NPM_GLOBAL = ["pnpm"];
