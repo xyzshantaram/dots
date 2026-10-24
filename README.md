@@ -113,7 +113,7 @@ services/        niri, wifi, bluetooth, pipewire, voxtype, OSD
 - `pacman -Q` resolves provides; `pacman -R` does not. Use `pacman -Qo <file>`.
 - sudo *can* prompt inside the chroot: `/dev/tty` resolves to the terminal that started the run.
 - A wrong font name never errors — fontconfig substitutes silently.
-- `WlrLayershell.layer: WlrLayer.Overlay` on a `PopupWindow` segfaults Quickshell. Set it on construction-time bindings only for `PanelWindow`.
+- `WlrLayershell.layer: WlrLayer.Overlay` on a `PopupWindow` segfaults Quickshell; it is safe on a `PanelWindow`.
 - An icon is found by desktop entry first. A launcher that wraps an app reports its own id, so fall back to `StartupWMClass`: Spotify's window is `spotify`, its entry is `spotify-launcher.desktop`.
 
 ## Assumptions
