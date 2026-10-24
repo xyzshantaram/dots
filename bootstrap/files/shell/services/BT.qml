@@ -36,6 +36,27 @@ Singleton {
 
     readonly property int connectedCount: known.filter((d) => d.connected).length
 
+    /**
+     * What the panel offers to pair with: everything BlueZ has seen that is not
+     * already ours. Empty until a scan has run, since a device only exists here
+     * once something has looked for it.
+     */
+    readonly property var nearby: {
+        if (!adapter) return []
+        return adapter.devices.values
+            .filter((d) => !d.bonded && !d.connected)
+            .sort((a, b) => String(a.name ?? a.address).localeCompare(String(b.name ?? b.address)))
+    }
+
+    /** Whether a scan is in progress. */
+    property bool scanning: false
+
+    function discover(): void {
+        if (!adapter || !adapter.enabled) return
+        if (scanProc.running) return
+        scanProc.running = true
+    }
+
     function toggleEnabled(): void {
         powerProc.running = true
     }
@@ -48,6 +69,36 @@ Singleton {
             device.address,
         ]
         deviceProc.running = true
+    }
+
+    /**
+     * Pair and connect, in that order, and trust it afterwards.
+     *
+     * Three commands rather than one: `connect` on an unknown address often
+     * pairs as a side effect, but not always, and a device that pairs without
+     * being trusted then refuses to reconnect on its own. Failures are ignored
+     * between them so a trust that is not needed does not abort the connect.
+     */
+    function pair(device): void {
+        pairProc.command = ["sh", "-c",
+            `bluetoothctl --timeout 25 pair ${device.address}; ` +
+            `bluetoothctl trust ${device.address}; ` +
+            `bluetoothctl connect ${device.address}`]
+        pairProc.running = true
+    }
+
+    /** Discovery runs for a fixed window and then stops, so nothing lingers. */
+    Process {
+        id: scanProc
+        command: ["bluetoothctl", "--timeout", "12", "scan", "on"]
+        running: false
+        onRunningChanged: root.scanning = running
+    }
+
+    Process {
+        id: pairProc
+        command: []
+        running: false
     }
 
     Process {

@@ -39,13 +39,39 @@ Item {
             }
         }
 
-        Text {
+        RowLayout {
+            spacing: 4
             Layout.maximumWidth: 220
-            text: Player.label
-            color: Player.playing ? Theme.textMuted : Theme.textDim
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
-            elide: Text.ElideRight
+
+            // Both white; the title is bold, which is the only difference that
+            // survives at 13px. The artist is not capped, so it takes the width
+            // it needs and the title gives way first.
+            Text {
+                visible: Player.artist !== ""
+                text: Player.artist
+                color: Theme.text
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+                elide: Text.ElideRight
+            }
+
+            Text {
+                visible: Player.artist !== ""
+                text: "—"
+                color: Theme.textDim
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+            }
+
+            Text {
+                Layout.maximumWidth: 120
+                text: Player.title
+                color: Theme.text
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+                font.weight: Font.Bold
+                elide: Text.ElideRight
+            }
         }
     }
 

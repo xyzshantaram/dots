@@ -25,6 +25,18 @@ PopupWindow {
     implicitWidth: 336
     implicitHeight: body.height + 16
 
+    // Scanning wakes the radio, so it only happens while the panel is up and the
+    // network list is the one being looked at.
+    property bool wifiOpen: false
+    property bool bluetoothOpen: false
+    property bool powerOpen: false
+
+    onVisibleChanged: Wifi.watching = visible && wifiOpen
+    onWifiOpenChanged: Wifi.watching = visible && wifiOpen
+    onBluetoothOpenChanged: {
+        if (visible && bluetoothOpen) BT.discover();
+    }
+
     anchor.item: root.anchorItem
     // Breathing room: eight to the left, which reads as eight off the right
     // edge of the screen since this hangs off the last widget on the bar, and
@@ -42,14 +54,34 @@ PopupWindow {
         required property bool on
         required property var activate
 
-        width: 158
-        height: 34
+        /** A second line under the label, for state in a few words. */
+        property string detail: ""
+        /** Its colour, so one chip can say something the others do not. */
+        property color detailColor: Theme.textDim
+        /** A chevron, for a chip that opens a list rather than toggling. */
+        property bool chevron: false
+        /** Whether that list is open; turns the chevron down. */
+        property bool expanded: false
+        /** What the chevron does. The rest of the chip still calls activate. */
+        property var expand: null
+        /** Shown on hover, for a label that a narrow chip cuts short. */
+        property string tip: ""
+
+        // Fixed, not implicit: the body is 336 wide with 14 either side, and
+        // two chips plus their gap have to add up to exactly that. Sized by
+        // their content they overran the column and the right margin vanished.
+        width: (root.implicitWidth - 36) / 2
+        height: chip.detail === "" ? 34 : 42
         radius: Theme.radiusSmall
-        color: chip.on ? Theme.calmDeep : Theme.surface
+        color: chipArea.containsMouse
+            ? (chip.on ? Theme.calm : Theme.surfacePill)
+            : (chip.on ? Theme.calmDeep : Theme.surface)
         border.width: 1
         border.color: chip.on ? Theme.calmBright : Theme.border
 
         Text {
+            id: chipGlyph
+
             anchors.left: parent.left
             anchors.leftMargin: 10
             anchors.verticalCenter: parent.verticalCenter
@@ -59,23 +91,281 @@ PopupWindow {
             font.pixelSize: Theme.iconSize
         }
 
-        Text {
-            anchors.left: parent.left
-            anchors.leftMargin: 10 + Theme.iconSize + 8
-            anchors.right: parent.right
-            anchors.rightMargin: 8
+        Column {
+            id: chipText
+
+            anchors.left: chipGlyph.right
+            anchors.leftMargin: 8
+            anchors.right: chip.chevron ? chevronBox.left : parent.right
+            anchors.rightMargin: chip.chevron ? 4 : 8
             anchors.verticalCenter: parent.verticalCenter
-            text: chip.label
-            color: chip.on ? Theme.text : Theme.textMuted
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
-            elide: Text.ElideRight
+            spacing: 1
+
+            Text {
+                width: parent.width
+                text: chip.label
+                color: chip.on ? Theme.text : Theme.textMuted
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+                elide: Text.ElideRight
+            }
+
+            Text {
+                visible: chip.detail !== ""
+                width: parent.width
+                text: chip.detail
+                color: chip.detailColor
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSizeSmall
+                elide: Text.ElideRight
+            }
+        }
+
+        // Its own target, not part of the whole-chip click: the chip toggles a
+        // radio, the chevron opens the list under it, and they are different
+        // actions on the same 150px surface.
+        Item {
+            id: chevronBox
+
+            visible: chip.chevron
+            // The chip's own MouseArea is declared after this one and would
+            // otherwise swallow every click and hover meant for the chevron.
+            z: 2
+            anchors.right: parent.right
+            anchors.rightMargin: 3
+            anchors.verticalCenter: parent.verticalCenter
+            width: 30
+            height: 26
+
+            Rectangle {
+                anchors.fill: parent
+                radius: 7
+                color: chevronArea.containsMouse ? Theme.surfacePill : "transparent"
+            }
+
+            Text {
+                anchors.centerIn: parent
+                text: chip.expanded ? "\uf078" : "\uf054"   // chevron-down / right
+                color: chip.on ? Theme.text : Theme.textDim
+                font.family: Theme.iconFont
+                font.pixelSize: Theme.fontSize + 3
+            }
+
+            MouseArea {
+                id: chevronArea
+                anchors.fill: parent
+                anchors.margins: -3
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    if (chip.expand) chip.expand();
+                }
+            }
+        }
+
+        MouseArea {
+            id: chipArea
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: chip.activate()
+            onEntered: {
+                if (chip.tip === "") return;
+                tip.content = chip.tip;
+                const p = chip.mapToItem(body, 0, chip.height + 4);
+                tip.x = Math.max(8, Math.min(body.width - tip.width - 8, p.x));
+                tip.y = p.y;
+            }
+            onExited: tip.content = ""
+        }
+    }
+
+    /**
+     * A switch, for a radio that can be on or off.
+     *
+     * Deliberately larger than the 11px heading it sits beside: this is the
+     * control for the list under it, and it should be the easiest thing in the
+     * row to hit.
+     */
+    component Switch: Item {
+        id: sw
+
+        required property bool on
+        required property var toggle
+
+        width: 40
+        height: 22
+
+        Rectangle {
+            anchors.fill: parent
+            radius: height / 2
+            color: sw.on ? Theme.alert : Theme.surface
+            border.width: 1
+            border.color: sw.on ? Theme.alert : Theme.border
+
+            Behavior on color { ColorAnimation { duration: 160 } }
+
+            Rectangle {
+                width: 16
+                height: 16
+                radius: 8
+                y: 2
+                x: sw.on ? parent.width - width - 3 : 3
+                color: sw.on ? Theme.text : Theme.textMuted
+
+                Behavior on x { NumberAnimation { duration: 160 } }
+            }
         }
 
         MouseArea {
             anchors.fill: parent
+            anchors.margins: -4
             cursorShape: Qt.PointingHandCursor
-            onClicked: chip.activate()
+            onClicked: sw.toggle()
+        }
+    }
+
+    /** A turning arc, for work that is under way and cannot say how long. */
+    component Spinner: Text {
+        id: spinner
+
+        text: "\uf110"   // spinner
+        color: Theme.textMuted
+        font.family: Theme.iconFont
+        font.pixelSize: Theme.fontSize + 3
+
+        NumberAnimation on rotation {
+            running: spinner.visible
+            from: 0
+            to: 360
+            duration: 900
+            loops: Animation.Infinite
+        }
+    }
+
+    /**
+     * One row in a list of things you can join: outlined, orange while it is the
+     * current one, with the action on the right.
+     *
+     * The action is a chevron to join and a cross to leave — and the cross
+     * becomes a check on the first click, because disconnecting on one stray
+     * click is not something to make easy.
+     */
+    component Entry: Column {
+        id: entry
+
+        required property string title
+        required property bool isActive
+        required property string glyph
+        /** Small text before the action, for a lock or a state. */
+        property string hint: ""
+        required property var action
+
+        property bool confirming: false
+        /** Whether the action on the current row is something to confirm. */
+        property bool confirms: true
+        /** The glyph on the current row: a cross, or a tick where a row is not
+         * something you can leave. */
+        property string activeGlyph: "\uf00d"
+
+        width: column.width
+        spacing: 4
+
+        Rectangle {
+            id: entryRow
+
+            width: parent.width
+            height: 36
+            radius: 10
+            // A surface rather than an outline: every row is a shade darker than
+            // the panel, and only the current one is marked out in orange.
+            color: Theme.surface
+            border.width: entry.isActive ? 2 : 0
+            border.color: Theme.alert
+
+            Text {
+                id: entryGlyph
+
+                anchors.left: parent.left
+                anchors.leftMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                text: entry.glyph
+                color: entry.isActive ? Theme.text : Theme.textMuted
+                font.family: Theme.iconFont
+                font.pixelSize: Theme.iconSize
+            }
+
+            Text {
+                anchors.left: entryGlyph.right
+                anchors.leftMargin: 10
+                anchors.right: entryHint.left
+                anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                text: entry.title
+                color: entry.isActive ? Theme.text : Theme.textMuted
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSize
+                elide: Text.ElideRight
+            }
+
+            Text {
+                id: entryHint
+
+                anchors.right: entryAction.left
+                anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                text: entry.hint
+                color: entry.isActive ? Theme.alert : Theme.textDim
+                font.family: entry.hint === "\uf023" ? Theme.iconFont : Theme.fontFamily
+                font.pixelSize: Theme.fontSizeSmall
+            }
+
+            Text {
+                id: entryAction
+
+                anchors.right: parent.right
+                anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                text: entry.isActive ? (entry.confirming ? "\uf00c" : entry.activeGlyph) : "\uf054"
+                color: entry.isActive ? Theme.alert : Theme.textDim
+                font.family: Theme.iconFont
+                font.pixelSize: entry.confirming ? Theme.fontSize + 3 : Theme.fontSizeSmall
+                font.bold: entry.confirming
+
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.margins: -8
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: entry.click()
+                }
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: entry.click()
+            }
+        }
+
+        Timer {
+            id: confirm
+            interval: 2500
+            onTriggered: entry.confirming = false
+        }
+
+        function click(): void {
+            if (!entry.isActive || !entry.confirms) {
+                entry.action();
+                return;
+            }
+            if (entry.confirming) {
+                entry.confirming = false;
+                entry.action();
+                return;
+            }
+            entry.confirming = true;
+            confirm.restart();
         }
     }
 
@@ -97,7 +387,7 @@ PopupWindow {
 
             Text {
                 text: "CONTROL CENTRE"
-                color: Theme.textDim
+                color: Theme.text
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeSmall
                 font.bold: true
@@ -111,16 +401,23 @@ PopupWindow {
                     glyph: "\uDB82\uDD2D"   // wifi_strength_off, standing in for the radio
                     label: "Wi-Fi"
                     on: Net.radioEnabled
-                    activate: () => {
-                        if (Net.radio) Net.radio.enabled = !Net.radio.enabled
-                    }
+                    chevron: true
+                    expanded: root.wifiOpen
+                    expand: () => root.wifiOpen = !root.wifiOpen
+                    // The radio's switch is in the list's header: the chip opens
+                    // the list, and turning the radio off is an action taken
+                    // where you can see what it affects.
+                    activate: () => root.wifiOpen = !root.wifiOpen
                 }
 
                 Chip {
                     glyph: "\uDB80\uDCB1"   // bluetooth_connect
                     label: "Bluetooth"
                     on: BT.enabled
-                    activate: () => BT.toggleEnabled()
+                    chevron: true
+                    expanded: root.bluetoothOpen
+                    expand: () => root.bluetoothOpen = !root.bluetoothOpen
+                    activate: () => root.bluetoothOpen = !root.bluetoothOpen
                 }
             }
 
@@ -129,9 +426,13 @@ PopupWindow {
 
                 Chip {
                     glyph: "\uf0e7"         // bolt
-                    label: `Power: ${Tuned.label}`
+                    label: Tuned.label
                     on: Tuned.active === "throughput-performance"
-                    activate: () => Tuned.cycle()
+                    chevron: true
+                    expanded: root.powerOpen
+                    expand: () => root.powerOpen = !root.powerOpen
+                    tip: `Power profile: ${Tuned.label}`
+                    activate: () => root.powerOpen = !root.powerOpen
                 }
 
                 Chip {
@@ -146,6 +447,15 @@ PopupWindow {
                 spacing: 8
 
                 Chip {
+                    glyph: "\uDB80\uDF6C"   // microphone
+                    label: "Dictation"
+                    detail: Dictation.byline
+                    detailColor: Theme.alert
+                    on: Dictation.running
+                    activate: () => Dictation.toggle()
+                }
+
+                Chip {
                     glyph: "\uf0f3"         // bell
                     label: "Don't disturb"
                     on: root.server?.doNotDisturb ?? false
@@ -156,16 +466,9 @@ PopupWindow {
             }
 
             /**
-             * Power profile and caffeine.
-             *
-             * The profile is a dummy: powerprofilesctl is not installed on this
-             * machine, and 40-packages.ts now lists power-profiles-daemon. Once
-             * its unit is enabled this cycles the real thing — the shape of the
-             * control is right, it just does not reach anything yet.
-             *
-             * Caffeine is real, and is just a process that holds an inhibitor
-             * for as long as the toggle is on. Stopping the process releases it,
-             * which is the whole mechanism.
+             * Caffeine is a process that holds an inhibitor for as long as the
+             * toggle is on. Stopping the process releases it, which is the whole
+             * mechanism.
              */
             QtObject {
                 id: power
@@ -182,44 +485,337 @@ PopupWindow {
                 ]
             }
 
-            Rectangle { width: column.width; height: 1; color: Theme.border }
+            // Only with a list open: the rule below the chips and the one above
+            // dictation are the same line when both lists are shut.
+            Rectangle {
+                visible: root.wifiOpen || root.bluetoothOpen
+                width: column.width
+                height: 1
+                color: Theme.border
+            }
 
-            // ---- dictation, the whole stack rather than the pill's one word
+            // ---- networks, only while the Wi-Fi chip's chevron says so
+            Item {
+                visible: root.wifiOpen
+                width: column.width
+                height: 22
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "NETWORKS"
+                    color: Theme.text
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSizeSmall
+                    font.bold: true
+                }
+
+                Row {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 10
+
+                    Spinner {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: Wifi.scanning
+                    }
+
+                    Switch {
+                        on: Net.radioEnabled
+                        toggle: () => {
+                            if (Net.radio) Net.radio.enabled = !Net.radio.enabled
+                        }
+                    }
+                }
+            }
+
             Text {
-                text: "DICTATION"
+                visible: root.wifiOpen && Wifi.networks.length === 0
+                text: Wifi.scanning ? "Scanning…" : "Nothing in range"
                 color: Theme.textDim
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeSmall
-                font.bold: true
             }
 
-            Row {
-                spacing: 8
+            // Four rows at a time; the rest is a flick away. Row plus gap is 40,
+            // so that four times over — or the list itself when it is shorter.
+            Flickable {
+                id: networksView
 
-                Rectangle {
-                    width: 8
-                    height: 8
-                    radius: 4
-                    anchors.verticalCenter: parent.verticalCenter
-                    color: Voxtype.busy ? Theme.alert : Dictation.server === "active" ? Theme.calm : Theme.textDim
+                visible: root.wifiOpen
+                width: column.width
+                height: Math.min(4 * 40, networksColumn.height)
+                contentHeight: networksColumn.height
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                flickableDirection: Flickable.VerticalFlick
+
+                Column {
+                    id: networksColumn
+                    width: networksView.width
+                    spacing: 4
+
+                    Repeater {
+                        model: Wifi.networks
+
+                    Column {
+                        id: network
+
+                        required property var modelData
+
+                        width: column.width
+                        spacing: 4
+
+                        Entry {
+                            title: network.modelData.ssid
+                            isActive: network.modelData.active
+                            glyph: network.modelData.signal >= 75 ? "\uDB82\uDCBE"   // signal_cellular_3
+                                : network.modelData.signal >= 50 ? "\uDB82\uDCBD"    // signal_cellular_2
+                                : network.modelData.signal >= 25 ? "\uDB82\uDCBC"    // signal_cellular_1
+                                : "\uDB82\uDCBF"                                      // signal_cellular_outline
+                            hint: network.modelData.secured && !network.modelData.active ? "\uf023" : ""
+                            action: () => network.modelData.active
+                                ? Wifi.disconnect(network.modelData.ssid)
+                                : Wifi.connect(network.modelData.ssid, "")
+                        }
+
+                        // The passphrase, inline under the row it belongs to.
+                        Rectangle {
+                            visible: Wifi.needsPassword === network.modelData.ssid
+                            width: parent.width
+                            height: 32
+                            radius: 10
+                            color: Theme.surface
+                            border.width: 1
+                            border.color: Theme.border
+
+                            TextInput {
+                                id: passphrase
+
+                                anchors.fill: parent
+                                anchors.leftMargin: 10
+                                anchors.rightMargin: 10
+                                verticalAlignment: TextInput.AlignVCenter
+                                focus: parent.visible
+                                echoMode: TextInput.Password
+                                color: Theme.text
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSize
+                                selectionColor: Theme.calmBright
+                                selectedTextColor: Theme.text
+
+                                onAccepted: {
+                                    const secret = text;
+                                    text = "";
+                                    Wifi.submit(secret);
+                                }
+
+                                Keys.onEscapePressed: Wifi.cancel()
+
+                                Text {
+                                    anchors.fill: parent
+                                    verticalAlignment: Text.AlignVCenter
+                                    visible: passphrase.text === ""
+                                    text: "Passphrase, then Enter"
+                                    color: Theme.textDim
+                                    font: passphrase.font
+                                }
+                            }
+                        }
+                    }
                 }
+            }
+            }
+
+            // ---- bluetooth, only while its chevron says so
+            Item {
+                visible: root.bluetoothOpen
+                width: column.width
+                height: 22
 
                 Text {
-                    text: Dictation.summary
-                    color: Voxtype.busy ? Theme.text : Theme.textMuted
+                    id: bluetoothHeading
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "BLUETOOTH"
+                    color: Theme.text
                     font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSize
+                    font.pixelSize: Theme.fontSizeSmall
+                    font.bold: true
+                }
+
+                Row {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 10
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: !BT.available
+                        text: "no adapter"
+                        color: Theme.textDim
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSizeSmall
+                    }
+
+                    Switch {
+                        on: BT.enabled
+                        toggle: () => BT.toggleEnabled()
+                    }
+                }
+            }
+
+            Column {
+                visible: root.bluetoothOpen
+                width: column.width
+                spacing: 4
+
+                Repeater {
+                    model: BT.known
+
+                    Column {
+                        id: device
+
+                        required property var modelData
+
+                        width: column.width
+                        spacing: 4
+
+                        Entry {
+                            title: device.modelData.name || device.modelData.address
+                            isActive: device.modelData.connected
+                            glyph: device.modelData.connected
+                                ? "\uDB80\uDCB1"   // bluetooth_connect
+                                : "\uDB80\uDCAF"   // bluetooth
+                            action: () => BT.toggleDevice(device.modelData)
+                        }
+                    }
                 }
             }
 
             Text {
-                visible: Dictation.detail !== ""
-                width: column.width
-                text: Dictation.detail
+                visible: root.bluetoothOpen && BT.known.length === 0
+                text: BT.enabled ? "Nothing paired" : "Bluetooth is off"
                 color: Theme.textDim
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSizeSmall
+            }
+
+            // What is in range and not ours yet. Discovery runs for a window
+            // when the list opens, so this fills in as devices answer.
+            Item {
+                visible: root.bluetoothOpen && (BT.nearby.length > 0 || BT.scanning)
+                width: column.width
+                height: 18
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "AVAILABLE"
+                    color: Theme.textDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSizeSmall
+                    font.bold: true
+                }
+
+                Spinner {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: BT.scanning
+                }
+            }
+
+            Column {
+                visible: root.bluetoothOpen
+                width: column.width
+                spacing: 4
+
+                Repeater {
+                    model: BT.nearby
+
+                    Column {
+                        id: candidate
+
+                        required property var modelData
+
+                        width: column.width
+                        spacing: 4
+
+                        Entry {
+                            title: candidate.modelData.name || candidate.modelData.address
+                            isActive: false
+                            glyph: "\uDB80\uDCAF"   // bluetooth
+                            action: () => BT.pair(candidate.modelData)
+                        }
+                    }
+                }
+            }
+
+            Text {
+                visible: root.wifiOpen && Wifi.error !== ""
+                width: column.width
+                text: Wifi.error
+                color: Theme.alert
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeSmall
                 wrapMode: Text.WordWrap
+            }
+
+            // ---- power profiles, only while the bolt's chevron says so
+            Rectangle {
+                visible: root.powerOpen
+                width: column.width
+                height: 1
+                color: Theme.border
+            }
+
+            Item {
+                visible: root.powerOpen
+                width: column.width
+                height: 16
+
+                Text {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "POWER PROFILE"
+                    color: Theme.text
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSizeSmall
+                    font.bold: true
+                }
+            }
+
+            Column {
+                visible: root.powerOpen
+                width: column.width
+                spacing: 4
+
+                Repeater {
+                    model: Tuned.profiles
+
+                    // An outer item so modelData exists: an inline component
+                    // has its own context and cannot see the delegate's, so
+                    // every use below goes through this id.
+                    Column {
+                        id: profile
+
+                        required property var modelData
+
+                        width: column.width
+                        spacing: 4
+
+                        Entry {
+                            title: Tuned.pretty(profile.modelData)
+                            isActive: Tuned.active === profile.modelData
+                            glyph: "\uf0e7"        // bolt
+                            // The current profile is marked, not left: clicking
+                            // it applies it again rather than asking to confirm.
+                            activeGlyph: "\uf00c"
+                            confirms: false
+                            action: () => Tuned.apply(profile.modelData)
+                        }
+                    }
+                }
             }
 
             Rectangle { width: column.width; height: 1; color: Theme.border }
@@ -227,7 +823,7 @@ PopupWindow {
             // ---- now playing, with the transport the bar has no room for
             Text {
                 text: "NOW PLAYING"
-                color: Theme.textDim
+                color: Theme.text
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeSmall
                 font.bold: true
@@ -241,62 +837,65 @@ PopupWindow {
                 font.pixelSize: Theme.fontSizeSmall
             }
 
-            Row {
+            // Cover above the two lines, everything centred on the panel's axis:
+            // beside each other the block reads left-heavy, because the text
+            // inside it is left-aligned.
+            Column {
                 visible: Player.present
-                spacing: 10
+                width: parent.width
+                spacing: 6
 
                 Rectangle {
-                    width: 44
-                    height: 44
-                    radius: 6
+                    width: 64
+                    height: 64
+                    radius: 8
                     color: Theme.surface
                     clip: true
+                    anchors.horizontalCenter: parent.horizontalCenter
 
                     Image {
                         anchors.fill: parent
                         visible: Player.art !== ""
                         source: Player.art
                         fillMode: Image.PreserveAspectCrop
-                        sourceSize.width: 88
-                        sourceSize.height: 88
+                        sourceSize.width: 128
+                        sourceSize.height: 128
                     }
                 }
 
-                Column {
-                    width: column.width - 54
-                    spacing: 2
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: Player.title || "—"
+                    color: Theme.text
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSize + 1
+                    font.weight: Font.Bold
+                    elide: Text.ElideRight
+                }
 
-                    Text {
-                        width: parent.width
-                        text: Player.title || "—"
-                        color: Theme.text
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSize
-                        font.bold: true
-                        elide: Text.ElideRight
-                    }
-
-                    Text {
-                        width: parent.width
-                        text: Player.artist
-                        color: Theme.textMuted
-                        font.family: Theme.fontFamily
-                        font.pixelSize: Theme.fontSizeSmall
-                        elide: Text.ElideRight
-                    }
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: Player.artist
+                    color: Theme.textMuted
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSizeSmall
+                    elide: Text.ElideRight
                 }
             }
 
             Row {
                 visible: Player.present
-                spacing: 14
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: 24
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "\uf048"   // step-backward
                     color: Player.player?.canGoPrevious ? Theme.text : Theme.textDim
                     font.family: Theme.iconFont
-                    font.pixelSize: Theme.iconSize
+                    font.pixelSize: Theme.iconSize + 4
 
                     MouseArea {
                         anchors.fill: parent
@@ -310,7 +909,7 @@ PopupWindow {
                     text: Player.playing ? "\uf04c" : "\uf04b"   // pause / play
                     color: Theme.text
                     font.family: Theme.iconFont
-                    font.pixelSize: Theme.iconSize + 4
+                    font.pixelSize: Theme.iconSize + 12
 
                     MouseArea {
                         anchors.fill: parent
@@ -324,7 +923,7 @@ PopupWindow {
                     text: "\uf051"   // step-forward
                     color: Player.player?.canGoNext ? Theme.text : Theme.textDim
                     font.family: Theme.iconFont
-                    font.pixelSize: Theme.iconSize
+                    font.pixelSize: Theme.iconSize + 4
 
                     MouseArea {
                         anchors.fill: parent
@@ -332,20 +931,14 @@ PopupWindow {
                         onClicked: Player.next()
                     }
                 }
-
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: seeker.elapsed
-                    color: Theme.textDim
-                    font.family: Theme.fontFamily
-                    font.pixelSize: Theme.fontSizeSmall
-                }
             }
 
             /**
-             * The seek bar. One control for both the bar and the handle, since
-             * a 4px target is not something to ask anyone to hit — the same
-             * reasoning as the mixer's levels.
+             * The seek bar, full width, with the elapsed time to its left.
+             *
+             * One control for both the bar and the handle, since a 4px target is
+             * not something to ask anyone to hit — the same reasoning as the
+             * mixer's levels.
              */
             Item {
                 id: seeker
@@ -359,43 +952,63 @@ PopupWindow {
                     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
                 }
 
-                readonly property string elapsed: clock(Player.position)
+                Text {
+                    id: elapsedText
 
-                Rectangle {
+                    anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width
-                    height: 4
-                    radius: 2
-                    color: Theme.border
+                    width: 34
+                    text: seeker.clock(Player.elapsed)
+                    color: Theme.textDim
+                    font.family: Theme.fontFamily
+                    font.pixelSize: Theme.fontSizeSmall
                 }
 
-                Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Player.length > 0 ? parent.width * Math.min(1, Player.position / Player.length) : 0
-                    height: 4
-                    radius: 2
-                    color: Player.seekable ? Theme.calmBright : Theme.textDim
-                }
+                Item {
+                    id: bar
 
-                Rectangle {
-                    visible: Player.seekable
-                    anchors.verticalCenter: parent.verticalCenter
-                    x: (Player.length > 0 ? parent.width * Math.min(1, Player.position / Player.length) : 0) - width / 2
-                    width: 12
-                    height: 12
-                    radius: 6
-                    color: Theme.text
-                }
+                    anchors.left: elapsedText.right
+                    anchors.leftMargin: 10
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
 
-                MouseArea {
-                    anchors.fill: parent
-                    anchors.topMargin: -4
-                    anchors.bottomMargin: -4
-                    cursorShape: Player.seekable ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width
+                        height: 4
+                        radius: 2
+                        color: Theme.border
+                    }
 
-                    onPressed: (mouse) => Player.seekTo(mouse.x / width * Player.length)
-                    onPositionChanged: (mouse) => {
-                        if (pressed) Player.seekTo(mouse.x / width * Player.length)
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Player.length > 0 ? parent.width * Math.min(1, Player.elapsed / Player.length) : 0
+                        height: 4
+                        radius: 2
+                        color: Player.seekable ? Theme.calmBright : Theme.textDim
+                    }
+
+                    Rectangle {
+                        visible: Player.seekable
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: (Player.length > 0 ? parent.width * Math.min(1, Player.elapsed / Player.length) : 0) - width / 2
+                        width: 12
+                        height: 12
+                        radius: 6
+                        color: Theme.text
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.topMargin: -4
+                        anchors.bottomMargin: -4
+                        cursorShape: Player.seekable ? Qt.PointingHandCursor : Qt.ArrowCursor
+
+                        onPressed: (mouse) => Player.seekTo(mouse.x / width * Player.length)
+                        onPositionChanged: (mouse) => {
+                            if (pressed) Player.seekTo(mouse.x / width * Player.length)
+                        }
                     }
                 }
             }
@@ -405,7 +1018,7 @@ PopupWindow {
             // ---- notifications, last: they arrive and leave on their own
             Text {
                 text: "NOTIFICATIONS"
-                color: Theme.textDim
+                color: Theme.text
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeSmall
                 font.bold: true
@@ -475,6 +1088,32 @@ PopupWindow {
                         onClicked: note.modelData.dismiss()
                     }
                 }
+            }
+        }
+
+        // A chip's label, whole, while the pointer is on it. Inside the body so
+        // it cannot spill outside the panel.
+        Rectangle {
+            id: tip
+
+            property string content: ""
+
+            visible: content !== ""
+            z: 20
+            width: tipLabel.implicitWidth + 16
+            height: tipLabel.implicitHeight + 8
+            radius: 6
+            color: Theme.surfacePill
+            border.width: 1
+            border.color: Theme.border
+
+            Text {
+                id: tipLabel
+                anchors.centerIn: parent
+                text: tip.content
+                color: Theme.text
+                font.family: Theme.fontFamily
+                font.pixelSize: Theme.fontSizeSmall
             }
         }
     }

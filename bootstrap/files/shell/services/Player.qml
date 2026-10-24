@@ -30,7 +30,30 @@ Singleton {
     readonly property real length: player?.length ?? 0
     readonly property bool seekable: (player?.canSeek ?? false) && length > 0
 
-    readonly property string label: artist ? `${artist} — ${title}` : title
+    /**
+     * The clock the panel draws, which is ours rather than the player's.
+     *
+     * MPRIS publishes Position when something happens, not once a second —
+     * Spotify reports it at track changes and seeks and otherwise leaves it
+     * alone — so a bar bound straight to it sits still. The timer advances
+     * between reports, and a report that is ahead wins, so it never drifts far.
+     */
+    property real elapsed: 0
+
+    onPositionChanged: elapsed = position
+    onTitleChanged: elapsed = position
+    onPresentChanged: elapsed = position
+
+    Timer {
+        interval: 1000
+        running: root.playing
+        repeat: true
+        onTriggered: root.elapsed = root.position > root.elapsed
+            ? root.position
+            : (root.length > 0
+                ? Math.min(root.length, root.elapsed + 1)
+                : root.elapsed + 1)
+    }
 
     function togglePlaying(): void {
         if (player?.canTogglePlaying) player.togglePlaying()

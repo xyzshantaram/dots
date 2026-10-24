@@ -20,11 +20,28 @@ Singleton {
 
     property string active: ""
 
-    readonly property string label: active === "" ? "unknown" : active
+    readonly property string label: active === "" ? "unknown" : pretty(active)
 
-    function cycle(): void {
-        const next = profiles[(profiles.indexOf(active) + 1) % profiles.length]
-        apply(next)
+    /**
+     * The daemon's slug in words.
+     *
+     * tuned-adm names profiles after their tuning goal — throughput-performance,
+     * latency-performance — and a chip that reads "throughput-performance" is
+     * reading the config file aloud. The mapping is a table rather than a rule
+     * because each of these is a name, and the fallback only has to be better
+     * than nothing for a profile that is not in it.
+     */
+    function pretty(name: string): string {
+        const words = {
+            "balanced": "Balanced",
+            "powersave": "Power save",
+            "throughput-performance": "Performance",
+            "latency-performance": "Low latency",
+            "network-latency": "Network latency",
+            "network-throughput": "Network throughput",
+            "virtual-guest": "Virtual guest",
+        };
+        return words[name] ?? name.replace(/-/g, " ");
     }
 
     function apply(name): void {

@@ -139,69 +139,6 @@ PopupWindow {
         }
     }
 
-    /** One row of a device list: name, and whether it is the default. */
-    component DeviceRow: Item {
-        id: deviceRow
-
-        required property var node
-        required property bool isSink
-        required property var current
-
-        readonly property bool isCurrent: deviceRow.node === deviceRow.current
-
-        // TEMPORARY: what each row was handed, so the panel can be compared
-        // with the list the service logged.
-        Component.onCompleted: console.log(
-            "DEVROW isSink:", deviceRow.isSink,
-            "name:", deviceRow.node?.name,
-            "id:", deviceRow.node?.id,
-            "desc:", deviceRow.node?.description,
-            "nodeIsSink:", deviceRow.node?.isSink,
-            "nodeIsStream:", deviceRow.node?.isStream,
-            "class:", deviceRow.node?.properties?.["media.class"])
-
-        width: 304
-        height: 26
-
-        Rectangle {
-            anchors.fill: parent
-            radius: 8
-            color: deviceArea.containsMouse ? Theme.surface : "transparent"
-        }
-
-        Text {
-            anchors.left: parent.left
-            anchors.leftMargin: 8
-            anchors.right: mark.left
-            anchors.rightMargin: 8
-            anchors.verticalCenter: parent.verticalCenter
-            text: deviceRow.node?.description || deviceRow.node?.nickname || deviceRow.node?.name || ""
-            color: deviceRow.isCurrent ? Theme.text : Theme.textMuted
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSize
-            elide: Text.ElideRight
-        }
-
-        Text {
-            id: mark
-            anchors.right: parent.right
-            anchors.rightMargin: 8
-            anchors.verticalCenter: parent.verticalCenter
-            text: deviceRow.isCurrent ? "default" : ""
-            color: Theme.calm
-            font.family: Theme.fontFamily
-            font.pixelSize: Theme.fontSizeSmall
-        }
-
-        MouseArea {
-            id: deviceArea
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: Audio.makeDefault(deviceRow.node, deviceRow.isSink)
-        }
-    }
-
     Rectangle {
         id: body
 
@@ -235,7 +172,7 @@ PopupWindow {
             Repeater {
                 model: Audio.sinks
 
-                // A plain delegate, not the inline DeviceRow component. With a
+                // A plain delegate rather than an inline component. With a
                 // component delegate the rows received an object carrying a
                 // single `name` — eDP-1, a niri output — and nothing else of a
                 // node. Everything undefined but a name is not a PipeWire node,
@@ -244,19 +181,24 @@ PopupWindow {
                     required property var modelData
 
                     width: column.width
-                    height: 26
+                    height: 36
 
                     Rectangle {
                         anchors.fill: parent
-                        radius: 8
-                        color: sinkArea.containsMouse ? Theme.surface : "transparent"
+                        radius: 10
+                        // A surface, like the rows in the control centre, an
+                        // orange ring on the one everything is playing into,
+                        // and a shade lighter under the pointer.
+                        color: sinkArea.containsMouse ? Theme.surfacePill : Theme.surface
+                        border.width: modelData === Audio.sink ? 2 : 0
+                        border.color: Theme.alert
                     }
 
                     Text {
                         anchors.left: parent.left
-                        anchors.leftMargin: 8
+                        anchors.leftMargin: 10
                         anchors.right: sinkMark.left
-                        anchors.rightMargin: 8
+                        anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
                         text: Audio.label(modelData, "")
                         color: modelData === Audio.sink ? Theme.text : Theme.textMuted
@@ -268,10 +210,10 @@ PopupWindow {
                     Text {
                         id: sinkMark
                         anchors.right: parent.right
-                        anchors.rightMargin: 8
+                        anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData === Audio.sink ? "default" : ""
-                        color: Theme.calm
+                        color: Theme.alert
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSizeSmall
                     }
@@ -314,19 +256,21 @@ PopupWindow {
                     required property var modelData
 
                     width: column.width
-                    height: 26
+                    height: 36
 
                     Rectangle {
                         anchors.fill: parent
-                        radius: 8
-                        color: sourceArea.containsMouse ? Theme.surface : "transparent"
+                        radius: 10
+                        color: sourceArea.containsMouse ? Theme.surfacePill : Theme.surface
+                        border.width: modelData === Audio.source ? 2 : 0
+                        border.color: Theme.alert
                     }
 
                     Text {
                         anchors.left: parent.left
-                        anchors.leftMargin: 8
+                        anchors.leftMargin: 10
                         anchors.right: sourceMark.left
-                        anchors.rightMargin: 8
+                        anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
                         text: Audio.label(modelData, "")
                         color: modelData === Audio.source ? Theme.text : Theme.textMuted
@@ -338,10 +282,10 @@ PopupWindow {
                     Text {
                         id: sourceMark
                         anchors.right: parent.right
-                        anchors.rightMargin: 8
+                        anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData === Audio.source ? "default" : ""
-                        color: Theme.calm
+                        color: Theme.alert
                         font.family: Theme.fontFamily
                         font.pixelSize: Theme.fontSizeSmall
                     }

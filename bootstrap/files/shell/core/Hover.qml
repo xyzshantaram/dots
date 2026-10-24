@@ -30,5 +30,8 @@ Singleton {
         if (provider === item) provider = null
     }
 
-    readonly property string text: provider ? provider.tip : ""
+    // A widget that has no tooltip has no `tip` property at all, which is
+    // undefined rather than empty — and a bar that hovers a title with no
+    // tooltip should not warn once per pixel of movement.
+    readonly property string text: provider?.tip ?? ""
 }

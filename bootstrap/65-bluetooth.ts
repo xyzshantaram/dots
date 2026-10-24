@@ -14,14 +14,16 @@
  * while the control centre's toggle has nothing to toggle. The package that
  * makes the hardware exist here is bluez, and bluetoothctl is bluez-utils.
  *
- * The unit is enabled, not started: in a chroot it would be talking to a daemon
- * with no hardware to probe, and the point of the step is the next boot.
+ * The unit is enabled, and started when the ladder is running the live system.
+ * In a chroot starting it would be a daemon with no hardware to probe; live, it
+ * is the difference between a step you have to reboot after and one that leaves
+ * an adapter the shell can see straight away.
  *
  * The adapter's own power state is deliberately not forced. BlueZ remembers it
  * across boots, and the shell has a toggle for it — a step that turned it on
  * would fight whoever turned it off.
  */
-import { fail, inArch, inArchSoft, main, needMount, ok, say } from "./lib.ts";
+import { LIVE, fail, inArch, inArchSoft, main, needMount, ok, say } from "./lib.ts";
 
 const PKGS = ["bluez", "bluez-utils"];
 
@@ -34,8 +36,12 @@ async function up(): Promise<void> {
     say("pacman failed; see above");
     process.exit(install.exitCode);
   }
-  await inArch("systemctl", "enable", "bluetooth.service");
-  say("BlueZ installed, bluetooth.service enabled for next boot");
+  if (LIVE) {
+    await inArch("systemctl", "enable", "--now", "bluetooth.service");
+  } else {
+    await inArch("systemctl", "enable", "bluetooth.service");
+  }
+  say(`BlueZ installed, bluetooth.service ${LIVE ? "started and enabled" : "enabled for next boot"}`);
   say((await inArch("bluetoothctl", "--version").text()).trim());
 }
 
