@@ -72,7 +72,7 @@ window-rule {
 // itself now, and two daemons cannot both hold that name — whichever started
 // first would win it, and the control centre's notification list would sit
 // permanently empty while swaync drew its own popups over the top.
-spawn-at-startup "qs"
+spawn-at-startup "qs" "-p" "/home/shan/.config/shell"
 
 hotkey-overlay {
     // Mod+Shift+/ lists these.

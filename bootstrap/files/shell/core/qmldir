@@ -1,0 +1,3 @@
+singleton Theme 1.0 Theme.qml
+singleton Situation 1.0 Situation.qml
+singleton Hover 1.0 Hover.qml
