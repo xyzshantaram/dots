@@ -26,6 +26,15 @@ Singleton {
     readonly property bool useEthernet: wired !== null
     readonly property bool online: connected.length > 0
 
+    /**
+     * The wireless adapter itself, connected or not — what the control centre's
+     * radio toggle acts on. `wifi` above is only ever a *connected* wifi, so it
+     * is null exactly when someone would want to switch the radio back on.
+     */
+    readonly property var radio: Networking.devices.values.find((d) =>
+        String(d.type) === "1") ?? null
+    readonly property bool radioEnabled: radio?.enabled ?? false
+
     /** Connected and not by cable, which is what makes this a wireless link. */
     readonly property bool wireless: online && !useEthernet
 

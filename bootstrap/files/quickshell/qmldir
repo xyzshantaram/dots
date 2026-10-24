@@ -6,6 +6,9 @@ BatteryPill 1.0 BatteryPill.qml
 CapsLock 1.0 CapsLock.qml
 Clock 1.0 Clock.qml
 Connectivity 1.0 Connectivity.qml
+ControlCentre 1.0 ControlCentre.qml
+MenuDown 1.0 MenuDown.qml
+NowPlaying 1.0 NowPlaying.qml
 MetricIcons 1.0 MetricIcons.qml
 Mixer 1.0 Mixer.qml
 Pill 1.0 Pill.qml

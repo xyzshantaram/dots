@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Services.Notifications
 import Quickshell.Widgets
 import "services"
 
@@ -17,6 +18,14 @@ import "services"
 // drawn, and the mask is what stops that height taking clicks meant for
 // whatever is underneath.
 Scope {
+    // One notification server for the whole session, deliberately outside the
+    // per-screen Variants: two of these would race for the same D-Bus name and
+    // one would lose. Passing it into the panel rather than making another is
+    // the same reason.
+    NotificationServer {
+        id: notifications
+    }
+
     Variants {
         model: Quickshell.screens
 
@@ -86,6 +95,9 @@ Scope {
                 // Left: when it is, what is focused, and what is playing.
                 Clock {}
                 WindowTitle {}
+                // Only while something is playing, and to the right of the
+                // window title as asked.
+                NowPlaying {}
 
                 // The middle is deliberately empty: the bar is a left cluster
                 // and a right cluster with space between them. This spacer is
@@ -108,6 +120,19 @@ Scope {
                 Volume { id: volume }
                 Connectivity { id: bt }
                 BatteryPill {}
+
+                // The control centre's door, at the very right: everything
+                // before it is a reading, and this one is the way in.
+                MenuDown { id: menuDown }
+            }
+
+            // The panel it opens. A real window like the mixer, and anchored
+            // the same way, flipped to this edge.
+            ControlCentre {
+                id: centre
+                anchorItem: menuDown
+                visible: menuDown.menuOpen
+                server: notifications
             }
 
             // The mixer is its own popup window rather than a panel in the
@@ -125,9 +150,13 @@ Scope {
             Item {
                 id: tooltip
 
-                // Hidden while the tray menu is open: both would sit in the same
-                // place, and the menu is the one the pointer is heading for.
-                visible: Hover.text !== "" && !tray.menuOpen
+                // Hidden while any dropdown is open, not just the tray's. The
+                // tooltip and an open panel compete for the same patch of
+                // screen, and the panel is what the pointer is heading for.
+                // Hovering the item that opened it is included on purpose: a
+                // tooltip on top of its own menu is the worst case of the two.
+                visible: Hover.text !== "" && !tray.menuOpen && !bt.menuOpen
+                    && !volume.menuOpen && !menuDown.menuOpen
                 z: 10
 
                 width: label.implicitWidth + 16

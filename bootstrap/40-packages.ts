@@ -39,9 +39,14 @@ const KERNEL = ["linux-zen", "amd-ucode", "efibootmgr"];
 /**
  * The launcher (vicinae) is not here: it is AUR-only, so 110-niri.ts installs
  * it through aurInstall instead. nwg-drawer used to sit in this list.
+ *
+ * swaync used to be here as the notification daemon, spawned before qs so
+ * notifications existed by the time the shell registered. Quickshell's own
+ * NotificationServer replaced it: one daemon, and the one that the control
+ * centre can actually draw.
  */
 const DESKTOP = [
-  "niri", "wezterm", "quickshell", "swaync", "gtklock",
+  "niri", "wezterm", "quickshell", "gtklock",
   "swaybg", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk",
   "nautilus", "papers", "gedit",
 ];
@@ -52,9 +57,16 @@ const DESKTOP = [
  * panel. It talks to /dev/i2c-*, so it also wants the i2c-dev module loaded and
  * write access to those nodes, which this ladder does not arrange — expect to
  * add the account to a group or a udev rule before it works.
+ *
+ * tuned is what the control centre's power menu switches, through tuned-adm.
+ * TuneD rather than power-profiles-daemon: the two claim the same role and
+ * cannot coexist, and TuneD is the one with profiles worth having on an AMD
+ * laptop. The unit needs enabling as well as installing, which is the one thing
+ * this list cannot do.
  */
 const HW = [
   "keyd", "brightnessctl", "playerctl", "fprintd", "alsa-utils", "ddcutil",
+  "tuned",
   "linux-firmware-amdgpu", "linux-firmware-other",
 ];
 

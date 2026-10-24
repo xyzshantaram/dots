@@ -86,7 +86,7 @@ Pill {
     }
 
     /** Per glyph, by eye: see the note in Tray.qml. */
-    property int glyphNudgeX: 0
+    property int glyphNudgeX: 2
 
     MouseArea {
         anchors.fill: parent
