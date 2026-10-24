@@ -78,7 +78,7 @@ export const ROOT_MNT = req("ROOT_MNT");
  *   ROOT_MNT=/           this running system
  *
  * "/" rather than a separate switch, so there is exactly one value to get
- * wrong — the same one 10-mount.ts mounts and verify.sh reads. `--live` on the
+ * wrong — the same one 10-mount.ts mounts and its verify reads. `--live` on the
  * runner sets it for a single run.
  */
 export const LIVE = ROOT_MNT === "/";
@@ -127,11 +127,13 @@ export const ESP_MOUNT = req("ESP_MOUNT");
 export const ESP_CURRENT = "/EFI/arch/current";
 export const ESP_PREVIOUS = "/EFI/arch/previous";
 
-export type Action = "up" | "down";
+export type Action = "up" | "down" | "verify";
 
 export type Actions = {
   up: () => Promise<void> | void;
   down: () => Promise<void> | void;
+  /** Read-only checks. Absent means this step has nothing to verify yet. */
+  verify?: () => Promise<void> | void;
 };
 
 /** Command name for log prefixes: 10-mount.ts -> 10-mount */
@@ -158,13 +160,51 @@ export function die(message: string): never {
  * `up` and `down` rather than `do`/`undo` because `do` is a reserved word in
  * JavaScript and cannot name a function.
  */
+const tally = { pass: 0, fail: 0, warn: 0 };
+
+/** A verify check that holds. */
+export function ok(what: string): void {
+  tally.pass++;
+  say(`ok    ${what}`);
+}
+
+/** A verify check that does not. The step's exit code follows from it. */
+export function fail(what: string): void {
+  tally.fail++;
+  say(`FAIL  ${what}`);
+}
+
+export function warn(what: string): void {
+  tally.warn++;
+  say(`warn  ${what}`);
+}
+
+/** Context that is neither pass nor fail. */
+export function note(what: string): void {
+  say(`..    ${what}`);
+}
+
+function report(): void {
+  if (tally.pass + tally.fail + tally.warn === 0) return;
+  say(`${tally.pass} passed, ${tally.fail} failed, ${tally.warn} warned`);
+  if (tally.fail > 0) process.exitCode = 1;
+}
+
 export async function main(actions: Actions): Promise<void> {
   const verb = process.argv[2];
-  if (verb !== "up" && verb !== "down") {
-    console.error(`usage: ${basename(process.argv[1] ?? "step")} up|down`);
+  if (verb !== "up" && verb !== "down" && verb !== "verify") {
+    console.error(`usage: ${basename(process.argv[1] ?? "step")} up|down|verify`);
     process.exit(2);
   }
   needRoot();
+
+  if (verb === "verify") {
+    if (!actions.verify) return;
+    await actions.verify();
+    report();
+    return;
+  }
+
   await actions[verb]();
 }
 

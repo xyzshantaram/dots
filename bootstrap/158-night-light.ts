@@ -25,7 +25,10 @@
  * list that is the whole machine's packages is easier to read than one that is
  * scattered through the steps that happen to want them.
  */
-import { inArch, inArchSoft, main, needMount, removeArch, say, writeArch } from "./lib.ts";
+import {
+  ARCH_USER, existsInArch, fail, inArch, inArchSoft, main, needMount, ok, readArch,
+  removeArch, say, writeArch,
+} from "./lib.ts";
 
 const TARGET = "/usr/local/bin/night-light";
 
@@ -61,4 +64,13 @@ async function down(): Promise<void> {
   say(`removed ${TARGET}; the spawn line in the niri config is 110-niri.ts's`);
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  (await existsInArch("/usr/local/bin/night-light"))
+    ? ok("night-light installed") : fail("night-light missing");
+  const pkg = await inArchSoft("pacman", "-Qq", "gammastep");
+  pkg.stdout.toString().trim() !== "" ? ok("gammastep installed") : fail("gammastep missing");
+  const niri = (await readArch(`/home/${ARCH_USER}/.config/niri/config.kdl`)) ?? "";
+  niri.includes("night-light") ? ok("niri starts night-light") : fail("niri does not start night-light");
+}
+
+await main({ up, down, verify });

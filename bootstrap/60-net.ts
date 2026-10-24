@@ -12,7 +12,7 @@
  * install usually has none of them enabled, and disabling one that Fedora
  * relies on would be a nasty surprise.
  */
-import { inArch, inArchSoft, main, needMount, say } from "./lib.ts";
+import { fail, inArch, inArchSoft, main, needMount, ok, say } from "./lib.ts";
 
 async function up(): Promise<void> {
   await needMount();
@@ -28,4 +28,9 @@ async function down(): Promise<void> {
   say("NetworkManager disabled");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const r = await inArchSoft("systemctl", "is-enabled", "NetworkManager.service");
+  r.exitCode === 0 ? ok("NetworkManager is enabled") : fail("NetworkManager is not enabled");
+}
+
+await main({ up, down, verify });

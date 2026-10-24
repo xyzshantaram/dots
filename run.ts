@@ -6,19 +6,20 @@
  *   bun run ladder plan [from] [to]            what a range would run
  *   bun run ladder up [from] [to]              run them in numeric order
  *   bun run ladder down [from] [to]            run them in reverse order
+ *   bun run ladder verify [from] [to]          run every step's read-only checks
  *   bun run ladder up --only <step>            exactly one step
  *   bun run ladder dualboot-utils up           another ladder, by name
  *   bun run ladder up --live                   ... into this system, not a target
  *
  * `bun run ladder` is the package.json script for this file, so no `sudo` is
- * needed on the command line: up and down escalate themselves, once, and
- * list/plan stay unprivileged.
+ * needed on the command line: up, down and verify escalate themselves, once,
+ * and list/plan stay unprivileged.
  *
- * A ladder is a directory of numbered TypeScript steps. Each one takes `up` or
- * `down`, is idempotent on `up` and exact on `down`, and describes itself in its
- * frontmatter.
+ * A ladder is a directory of numbered TypeScript steps. Each one takes `up`,
+ * `down` or `verify`, is idempotent on `up` and exact on `down`, and describes
+ * itself in its frontmatter.
  *
- * The first argument names a ladder when it is not one of the four verbs. Names
+ * The first argument names a ladder when it is not one of the five verbs. Names
  * are looked for at the repo root and then inside the main ladder, so both
  * `dualboot-utils` and `bootstrap` work. Only the steps directly inside
  * that directory are read: nothing is traversed, so the main ladder never picks
@@ -45,7 +46,7 @@ const MAIN_LADDER = join(ROOT, "bootstrap");
 /** Lives in the main ladder but is a helper, not a phase of the build. */
 const SKIP_IN_MAIN = new Set(["20-chroot.ts"]);
 
-const VERBS = new Set(["list", "plan", "up", "down"]);
+const VERBS = new Set(["list", "plan", "up", "down", "verify"]);
 
 type Step = { file: string; num: number; meta: Record<string, string> };
 
@@ -147,7 +148,12 @@ function selectSteps(dir: string, skip: Set<string>, args: Args): Step[] {
   return all.slice(start, end + 1);
 }
 
-async function runStep(dir: string, step: Step, action: "up" | "down"): Promise<void> {
+async function runStep(
+  dir: string,
+  step: Step,
+  action: "up" | "down" | "verify",
+  stopOnFail = true,
+): Promise<number> {
   console.error(`\n=== ${step.file} (${action}) ${step.meta.desc ?? ""}`);
   // process.execPath is this bun binary, so the child keeps working even when
   // sudo's secure_path does not include the one that started this.
@@ -158,11 +164,12 @@ async function runStep(dir: string, step: Step, action: "up" | "down"): Promise<
     env: process.env,
   });
   const code = await proc.exited;
-  if (code !== 0) {
+  if (code !== 0 && stopOnFail) {
     console.error(`run: ${step.file} ${action} failed with exit ${code}`);
     console.error("run: stopping. fix it, then re-run the same command.");
     process.exit(code);
   }
+  return code;
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -175,10 +182,11 @@ if (args.live) {
   console.error("run: --live: the target is this system (ROOT_MNT=/)");
 }
 
-// up and down touch the disk, and every step asserts root, so escalate once
-// here instead of making the caller remember. list and plan are read-only, so
-// they stay unprivileged and answer without a password prompt.
-if ((args.command === "up" || args.command === "down") && process.getuid?.() !== 0) {
+// up, down and verify all need root: up and down to touch the disk, verify to
+// read what they wrote — and escalating once is what lets a whole ladder be
+// checked unattended instead of prompting per step. list and plan are
+// read-only, so they stay unprivileged and answer without a password.
+if (["up", "down", "verify"].includes(args.command ?? "") && process.getuid?.() !== 0) {
   const raised = Bun.spawn(
     ["sudo", process.execPath, "run", import.meta.path, ...process.argv.slice(2)],
     { stdin: "inherit", stdout: "inherit", stderr: "inherit", env: process.env },
@@ -188,10 +196,24 @@ if ((args.command === "up" || args.command === "down") && process.getuid?.() !==
 
 const dir = resolveLadder(args.ladder);
 
+/** The same scope as this run, pointed at verify. */
+function verifyHint(): string {
+  const bits = ["bun run ladder"];
+  if (args.ladder !== undefined) bits.push(args.ladder);
+  bits.push("verify");
+  if (args.only !== undefined) bits.push("--only", args.only);
+  else {
+    if (args.from !== undefined) bits.push(args.from);
+    if (args.to !== undefined) bits.push(args.to);
+  }
+  if (args.live) bits.push("--live");
+  return bits.join(" ");
+}
+
 /** The skip list belongs to the main ladder, not to any other directory. */
 const skip = dir === resolve(MAIN_LADDER) ? SKIP_IN_MAIN : new Set<string>();
 const usage =
-  "usage: bun run ladder [ladder] list|plan|up|down [from] [to] [--only step] [--live]";
+  "usage: bun run ladder [ladder] list|plan|up|down|verify [from] [to] [--only step] [--live]";
 
 switch (args.command) {
   case "list": {
@@ -218,6 +240,19 @@ switch (args.command) {
     const ordered = args.command === "up" ? chosen : [...chosen].reverse();
     for (const step of ordered) await runStep(dir, step, args.command);
     console.error(`\nrun: ${ordered.length} step(s) ${args.command} complete`);
+    if (args.command === "up") console.error(`\nrun: confirm with: ${verifyHint()}`);
+    break;
+  }
+  case "verify": {
+    // Every rung is checked, not just up to the first failure: the point of a
+    // whole-ladder run is the full list of what is broken.
+    const chosen = selectSteps(dir, skip, args);
+    let broken = 0;
+    for (const step of chosen) {
+      if ((await runStep(dir, step, "verify", false)) !== 0) broken++;
+    }
+    console.error(`\nrun: ${chosen.length} step(s) verified, ${broken} with failures`);
+    if (broken > 0) process.exit(1);
     break;
   }
   default:

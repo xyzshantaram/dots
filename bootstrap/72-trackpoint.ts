@@ -30,7 +30,7 @@
  */
 import process from "node:process";
 import {
-  inArch, inArchSoft, main, needMount, removeArch, say, writeArch,
+  existsInArch, fail, inArch, inArchSoft, main, needMount, ok, removeArch, say, writeArch,
 } from "./lib.ts";
 
 const RULE = "/etc/udev/rules.d/99-trackpoint-ps2.rules";
@@ -74,4 +74,9 @@ async function down(): Promise<void> {
   say("udev reloaded; the device is a plain mouse again after it is re-opened");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const rule = "/etc/udev/rules.d/99-trackpoint-ps2.rules";
+  (await existsInArch(rule)) ? ok("trackpoint udev rule present") : fail("trackpoint udev rule missing");
+}
+
+await main({ up, down, verify });

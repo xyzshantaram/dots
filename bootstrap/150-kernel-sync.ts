@@ -13,8 +13,8 @@
  */
 import process from "node:process";
 import {
-  ARCH_UUID, ESP_MOUNT, KERNEL, SWAP_UUID, at, backupOnce, existsInArch,
-  inArchSoft, main, needMount, readArch, removeArch, restoreBackup, say,
+  ARCH_UUID, ESP_MOUNT, KERNEL, SWAP_UUID, at, backupOnce, existsInArch, fail,
+  inArchSoft, main, needMount, note, ok, readArch, removeArch, restoreBackup, say,
   writeArch,
 } from "./lib.ts";
 
@@ -169,4 +169,34 @@ async function down(): Promise<void> {
   say("removed the ESP kernel copies");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  (await existsInArch("/usr/local/bin/esp-sync")) ? ok("esp-sync installed") : fail("esp-sync missing");
+  (await existsInArch("/usr/share/libalpm/hooks/99-esp-kernel-sync.hook"))
+    ? ok("pacman hook installed") : fail("pacman hook missing");
+
+  const entry = (await readArch(`${ESP_MOUNT}/loader/entries/arch.conf`)) ?? "";
+  if (entry === "") {
+    fail("arch.conf is missing; systemd-boot has no Arch entry");
+    return;
+  }
+  ok("arch.conf present");
+
+  const refs = entry.split("\n")
+    .filter((l) => /^(linux|initrd)\s/.test(l))
+    .map((l) => l.split(/\s+/)[1].replace(/\\/g, "/"));
+  const missing: string[] = [];
+  for (const ref of refs) if (!(await existsInArch(`${ESP_MOUNT}${ref}`))) missing.push(ref);
+  missing.length === 0 ? ok("every file arch.conf names exists") : fail(`arch.conf references missing: ${missing.join(" ")}`);
+
+  entry.includes(`resume=UUID=${SWAP_UUID}`)
+    ? ok("arch.conf carries resume=") : fail("arch.conf has no resume= for the swap");
+
+  (await existsInArch(`${ESP_MOUNT}/loader/entries/arch-known-good.conf`))
+    ? fail("an arch-known-good entry is back") : ok("no arch-known-good entry");
+
+  const same = await inArchSoft("cmp", "-s", `/boot/vmlinuz-${KERNEL}`,
+    `${ESP_MOUNT}/EFI/arch/current/vmlinuz-${KERNEL}`);
+  same.exitCode === 0 ? ok("ESP current matches /boot") : note("ESP current differs from /boot; run esp-sync");
+}
+
+await main({ up, down, verify });

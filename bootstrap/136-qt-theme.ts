@@ -30,7 +30,8 @@
  * until one is added.
  */
 import {
-  ARCH_USER, inArch, inArchSoft, main, needMount, removeArch, say, writeUserFile,
+  ARCH_USER, existsInArch, fail, inArch, inArchSoft, main, needMount, ok, readArch,
+  removeArch, say, writeUserFile,
 } from "./lib.ts";
 
 const HOME = `/home/${ARCH_USER}`;
@@ -91,4 +92,15 @@ async function down(): Promise<void> {
   say("removed qt6ct, its config and the colour scheme");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  (await existsInArch("/usr/lib/qt6/plugins/platformthemes/libqt6ct.so"))
+    ? ok("qt6ct installed") : fail("qt6ct plugin missing");
+  const conf = (await readArch(`/home/${ARCH_USER}/.config/qt6ct/qt6ct.conf`)) ?? "";
+  conf.includes("breeze_libadwaita_dark")
+    ? ok("qt6ct points at the Breeze scheme") : fail("qt6ct.conf does not name the scheme");
+  const niri = (await readArch(`/home/${ARCH_USER}/.config/niri/config.kdl`)) ?? "";
+  niri.includes("QT_QPA_PLATFORMTHEME")
+    ? ok("niri exports QT_QPA_PLATFORMTHEME") : fail("niri does not export QT_QPA_PLATFORMTHEME");
+}
+
+await main({ up, down, verify });

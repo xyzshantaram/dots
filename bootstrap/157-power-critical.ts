@@ -28,7 +28,7 @@
  * draws it — a bar that showed it would be the thing to add, and this step
  * deliberately does not invent a second notifier.
  */
-import { inArch, inArchSoft, main, needMount, say } from "./lib.ts";
+import { fail, inArch, inArchSoft, main, needMount, ok, readArch, say } from "./lib.ts";
 
 const CONF = "/etc/UPower/UPower.conf";
 
@@ -73,4 +73,12 @@ async function down(): Promise<void> {
   say("restored UPower's defaults for the three keys");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const conf = (await readArch("/etc/UPower/UPower.conf")) ?? "";
+  conf.includes("UsePercentageForPolicy=true")
+    ? ok("UPower uses the battery percentage") : fail("UPower still uses a time estimate");
+  /^PercentageCritical=5$/m.test(conf) ? ok("critical at 5%") : fail("PercentageCritical is not 5");
+  /^CriticalAction=Hibernate$/m.test(conf) ? ok("critical action is hibernate") : fail("CriticalAction is not Hibernate");
+}
+
+await main({ up, down, verify });

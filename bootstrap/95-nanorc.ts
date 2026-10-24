@@ -15,8 +15,8 @@
  */
 import process from "node:process";
 import {
-  ARCH_USER, asUser, backupOnce, main, needMount, readArch, removeArch,
-  restoreBackup, say, writeArch,
+  ARCH_USER, asUser, backupOnce, existsInArch, fail, main, needMount, ok, readArch,
+  removeArch, restoreBackup, say, writeArch,
 } from "./lib.ts";
 
 const CONF = "/etc/nanorc";
@@ -54,4 +54,8 @@ async function down(): Promise<void> {
   }
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  (await existsInArch("/etc/nanorc")) ? ok("/etc/nanorc present") : fail("/etc/nanorc missing");
+}
+
+await main({ up, down, verify });

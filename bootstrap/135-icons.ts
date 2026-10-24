@@ -34,8 +34,8 @@
  */
 import process from "node:process";
 import {
-  ARCH_USER, asUser, aurInstall, inArchSoft, main, needMount, removeArch, say,
-  writeUserFile,
+  ARCH_USER, asUser, aurInstall, fail, inArchSoft, main, needMount, ok, readArch,
+  removeArch, say, writeUserFile,
 } from "./lib.ts";
 
 const HOME = `/home/${ARCH_USER}`;
@@ -92,4 +92,11 @@ async function down(): Promise<void> {
   say("removed icon settings and the theme package");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const theme = await inArchSoft("sh", "-c", "ls -d /usr/share/icons/Tela-purple* 2>/dev/null | head -1");
+  theme.stdout.toString().trim() !== "" ? ok("Tela purple icons installed") : fail("Tela purple icons missing");
+  const gtk = (await readArch(`/home/${ARCH_USER}/.config/gtk-3.0/settings.ini`)) ?? "";
+  gtk.includes("Tela") ? ok("GTK 3 names the Tela icons") : fail("GTK 3 settings do not name Tela");
+}
+
+await main({ up, down, verify });

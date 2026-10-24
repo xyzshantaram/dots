@@ -32,7 +32,8 @@
 import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import {
-  ARCH_USER, inArchSoft, main, needMount, removeArch, say, writeArch, writeUserFile,
+  ARCH_USER, existsInArch, fail, inArchSoft, main, needMount, ok, removeArch, say,
+  writeArch, writeUserFile,
 } from "./lib.ts";
 
 const SRC = `${import.meta.dir}/files/shell`;
@@ -82,4 +83,15 @@ async function down(): Promise<void> {
   say("removed the quickshell config");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  for (const f of ["shell.qml", "Shell.qml", "lock/Lock.qml", "lock/LockSurface.qml", "lock/LockService.qml"]) {
+    const p = `/home/${ARCH_USER}/.config/shell/${f}`;
+    (await existsInArch(p)) ? ok(`present: ${f}`) : fail(`missing: ${f}`);
+  }
+  (await existsInArch("/etc/pam.d/qslock"))
+    ? ok("/etc/pam.d/qslock present") : fail("/etc/pam.d/qslock missing");
+  (await existsInArch(`/home/${ARCH_USER}/.config/quickshell`))
+    ? fail("the old ~/.config/quickshell is back") : ok("no legacy ~/.config/quickshell");
+}
+
+await main({ up, down, verify });

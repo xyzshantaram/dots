@@ -17,7 +17,7 @@
  * /etc/udev. They are vendored into files/battery/ so this port is
  * self-contained.
  */
-import { inArchSoft, main, needMount, removeArch, say, writeArch } from "./lib.ts";
+import { existsInArch, fail, inArchSoft, main, needMount, ok, removeArch, say, writeArch } from "./lib.ts";
 
 const F = `${import.meta.dir}/files/battery`;
 
@@ -87,4 +87,18 @@ async function down(): Promise<void> {
   say("removed the battery and power files; thresholds reset to 0/100");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  for (const f of [
+    "/usr/local/bin/battery-charge-thresholds",
+    "/etc/systemd/system/battery-charge-thresholds.service",
+    "/etc/udev/rules.d/99-battery-charge-thresholds.rules",
+    "/etc/modprobe.d/audio-mute.conf",
+    "/etc/NetworkManager/conf.d/wifi-powersave.conf",
+    "/etc/tmpfiles.d/keyboard-backlight-off.conf",
+    "/etc/tmpfiles.d/pm-async-workaround.conf",
+  ]) {
+    (await existsInArch(f)) ? ok(`present: ${f.split("/").pop()}`) : fail(`missing: ${f}`);
+  }
+}
+
+await main({ up, down, verify });

@@ -24,7 +24,7 @@
 import process from "node:process";
 import { $ } from "bun";
 import {
-  ARCH_UID, ARCH_USER, asUserSoft, at, main, needMount, readArch, removeArch,
+  ARCH_UID, ARCH_USER, asUserSoft, at, fail, main, needMount, ok, readArch, removeArch,
   say, writeArch, writeUserFile,
 } from "./lib.ts";
 
@@ -136,4 +136,12 @@ async function down(): Promise<void> {
   say(`left ${PAPERS} alone`);
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  (await Bun.file(at("/usr/local/bin/wallpaper-random")).exists())
+    ? ok("wallpaper-random installed") : fail("wallpaper-random missing");
+  const niri = (await readArch(`/home/${ARCH_USER}/.config/niri/config.kdl`)) ?? "";
+  niri.includes("wallpaper-random")
+    ? ok("niri starts wallpaper-random") : fail("niri does not start wallpaper-random");
+}
+
+await main({ up, down, verify });

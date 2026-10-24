@@ -28,7 +28,7 @@
  */
 import process from "node:process";
 import {
-  ARCH_USER, backupOnce, inArch, inArchSoft, main, needMount, readArch, removeArch,
+  ARCH_USER, backupOnce, fail, inArch, inArchSoft, main, needMount, ok, readArch, removeArch,
   restoreBackup, say, writeArch,
 } from "./lib.ts";
 
@@ -133,4 +133,17 @@ async function down(): Promise<void> {
   say("removed pwfeedback drop-in");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  for (const f of [LOCAL_LOGIN, SUDO]) {
+    ((await readArch(f)) ?? "").includes("pam_fprintd.so")
+      ? ok(`${f} has pam_fprintd`) : fail(`${f} has no pam_fprintd`);
+  }
+  ((await readArch(PWFEEDBACK)) ?? "").includes("pwfeedback")
+    ? ok("pwfeedback enabled") : fail("pwfeedback missing");
+  (await readArch("/usr/local/bin/fpr-led")) !== null
+    ? ok("fpr-led installed") : fail("fpr-led missing");
+  const enabled = await inArchSoft("systemctl", "is-enabled", "fpr-led.service");
+  enabled.exitCode === 0 ? ok("fpr-led enabled") : fail("fpr-led not enabled");
+}
+
+await main({ up, down, verify });

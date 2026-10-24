@@ -35,7 +35,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
 import {
-  ARCH_UUID, ESP_UUID, KERNEL, LIVE, ROOT_MNT, SWAP_UUID, main, runningArch, say,
+  ARCH_UUID, ESP_UUID, KERNEL, LIVE, ROOT_MNT, SWAP_UUID, existsInArch, fail, main,
+  note, ok, runningArch, say,
 } from "./lib.ts";
 
 /** The Arch root by UUID, which is how 10-mount.ts mounts it too. */
@@ -197,4 +198,11 @@ async function down(): Promise<void> {
   say("read-only step, nothing to undo");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  for (const tool of ["/usr/bin/pacman", "/usr/bin/mkinitcpio"]) {
+    (await existsInArch(tool)) ? ok(`${tool} present`) : fail(`${tool} is missing`);
+  }
+  (await existsInArch("/etc/fstab")) ? ok("/etc/fstab present") : fail("/etc/fstab is missing");
+}
+
+await main({ up, down, verify });

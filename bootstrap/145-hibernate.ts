@@ -21,8 +21,8 @@
 import { $ } from "bun";
 import process from "node:process";
 import {
-  SWAP_UUID, at, inArch, inArchSoft, main, needMount, readArch, removeArch,
-  restoreBackup, say, writeArch,
+  SWAP_UUID, at, existsInArch, fail, inArch, inArchSoft, main, needMount, ok, readArch,
+  removeArch, restoreBackup, say, writeArch,
 } from "./lib.ts";
 
 const MKINITCPIO = "/etc/mkinitcpio.conf";
@@ -152,4 +152,28 @@ async function down(): Promise<void> {
   say(rebuild.exitCode === 0 ? "initramfs rebuilt without resume" : "mkinitcpio failed; rebuild by hand");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const hooks = (await readArch("/etc/mkinitcpio.conf")) ?? "";
+  /\bresume\b/.test(hooks) ? ok("HOOKS include resume") : fail("HOOKS lack resume; the image will not be restored");
+
+  const suspend = (await readArch("/etc/systemd/system/systemd-suspend.service.d/10-suspend-is-hibernate.conf")) ?? "";
+  /^ExecStart=$/m.test(suspend)
+    ? ok("suspend clears the packaged ExecStart")
+    : fail("suspend drop-in will run suspend and hibernate");
+  suspend.includes("systemd-sleep hibernate")
+    ? ok("suspend redirects to hibernate") : fail("suspend does not redirect to hibernate");
+
+  ((await readArch("/etc/systemd/sleep.conf.d/10-hibernate-mode.conf")) ?? "").includes("HibernateMode=shutdown")
+    ? ok("HibernateMode=shutdown") : fail("HibernateMode is not shutdown");
+
+  ((await readArch("/etc/systemd/logind.conf.d/10-hibernate.conf")) ?? "").includes("HandleLidSwitch=hibernate")
+    ? ok("lid close hibernates") : fail("lid close does not hibernate");
+
+  const mask = await inArchSoft("grep", "-rls", "hibernate-wakeup-mask", "/etc/systemd/system");
+  mask.exitCode === 0 ? fail("a drop-in still runs the wake-source mask") : ok("no wake-source mask");
+
+  (await existsInArch("/usr/lib/systemd/system-sleep/50-hibernate-led"))
+    ? ok("hibernate LED hook installed") : fail("hibernate LED hook missing");
+}
+
+await main({ up, down, verify });

@@ -22,8 +22,8 @@
  */
 import process from "node:process";
 import {
-  ARCH_USER, inArchSoft, main, needMount, readArch, removeArch, say, writeArch,
-  writeUserFile,
+  ARCH_USER, existsInArch, fail, inArchSoft, main, needMount, ok, readArch, removeArch,
+  say, writeArch, writeUserFile,
 } from "./lib.ts";
 
 const NIRI = `/home/${ARCH_USER}/.config/niri/config.kdl`;
@@ -87,4 +87,12 @@ async function down(): Promise<void> {
   say("removed idle-hibernate");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  (await existsInArch("/usr/local/bin/idle-hibernate"))
+    ? ok("idle-hibernate installed") : fail("idle-hibernate missing");
+  const niri = (await readArch(`/home/${ARCH_USER}/.config/niri/config.kdl`)) ?? "";
+  niri.includes("idle-hibernate")
+    ? ok("niri starts swayidle") : fail("niri does not start swayidle; idle does nothing");
+}
+
+await main({ up, down, verify });

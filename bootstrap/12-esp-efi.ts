@@ -19,7 +19,7 @@
 import { $ } from "bun";
 import process from "node:process";
 import {
-  ESP_MOUNT, ESP_UUID, at, isMounted, main, needMount, readArch, say,
+  ESP_MOUNT, ESP_UUID, at, fail, isMounted, main, needMount, ok, readArch, say,
   writeArch,
 } from "./lib.ts";
 
@@ -123,4 +123,21 @@ async function down(): Promise<void> {
   }
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const fstab = await readArch("/etc/fstab");
+  if (fstab === null) {
+    fail("/etc/fstab is missing");
+    return;
+  }
+  const line = fstab.split("\n").find((l) => l.includes(ESP_UUID));
+  if (line === undefined) {
+    fail(`no fstab line for the ESP (UUID=${ESP_UUID})`);
+    return;
+  }
+  const mountedAt = line.split(/\s+/)[1];
+  mountedAt === ESP_MOUNT
+    ? ok(`fstab mounts the ESP at ${ESP_MOUNT}`)
+    : fail(`fstab mounts the ESP at ${mountedAt}, expected ${ESP_MOUNT}`);
+}
+
+await main({ up, down, verify });

@@ -22,8 +22,8 @@
 import process from "node:process";
 import { $ } from "bun";
 import {
-  ARCH_UID, ARCH_USER, LIVE, asUserSoft, at, aurInstall, inArchSoft, main,
-  needMount, removeArch, say, writeArch, writeUserFile,
+  ARCH_UID, ARCH_USER, LIVE, asUserSoft, at, aurInstall, fail, inArchSoft, main,
+  needMount, ok, removeArch, say, writeArch, writeUserFile,
 } from "./lib.ts";
 
 const DEST = `/home/${ARCH_USER}/.config/niri/config.kdl`;
@@ -129,4 +129,14 @@ async function down(): Promise<void> {
   say("removed the mic-mute helper and the niri config");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const cfg = `/home/${ARCH_USER}/.config/niri/config.kdl`;
+  (await Bun.file(at(cfg)).exists()) ? ok("niri config present") : fail("niri config missing");
+  const v = await inArchSoft("niri", "validate", "-c", cfg);
+  v.exitCode === 0 ? ok("niri accepts config.kdl") : fail("niri rejects config.kdl");
+  (await Bun.file(at("/usr/local/bin/mic-mute")).exists()) ? ok("mic-mute installed") : fail("mic-mute missing");
+  const unit = `/home/${ARCH_USER}/.config/systemd/user/graphical-session.target.wants/vicinae.service`;
+  (await Bun.file(at(unit)).exists()) ? ok("vicinae user unit enabled") : fail("vicinae user unit not enabled");
+}
+
+await main({ up, down, verify });

@@ -38,7 +38,7 @@
 import process from "node:process";
 import { $ } from "bun";
 import {
-  ARCH_USER, asUser, at, ensureRustup, inArch, inArchSoft, main, needMount, say,
+  ARCH_USER, asUser, at, ensureRustup, fail, inArch, inArchSoft, main, needMount, ok, say,
 } from "./lib.ts";
 
 const PKG = "niri-gestures";
@@ -166,4 +166,9 @@ async function down(): Promise<void> {
   await inArchSoft("rm", "-rf", WORK);
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const r = await inArchSoft("pacman", "-Qq", "niri-gestures");
+  r.stdout.toString().trim() !== "" ? ok("niri-gestures installed") : fail("niri-gestures is not installed");
+}
+
+await main({ up, down, verify });

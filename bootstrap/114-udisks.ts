@@ -32,7 +32,7 @@
 import process from "node:process";
 import { $ } from "bun";
 import {
-  ARCH_USER, asUserSoft, existsInArch, main, needMount, readArch, removeArch,
+  ARCH_USER, asUserSoft, existsInArch, fail, main, needMount, ok, readArch, removeArch,
   say, writeUserFile,
 } from "./lib.ts";
 
@@ -91,4 +91,13 @@ async function down(): Promise<void> {
   say(`removed ${CONFIG}`);
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  (await existsInArch("/usr/bin/udiskie")) ? ok("udiskie installed") : fail("udiskie missing");
+  (await readArch(`/home/${ARCH_USER}/.config/udiskie/config.yml`)) !== null
+    ? ok("udiskie config present") : fail("udiskie config missing");
+  const niri = (await readArch(`/home/${ARCH_USER}/.config/niri/config.kdl`)) ?? "";
+  niri.includes('spawn-at-startup "udiskie"')
+    ? ok("niri starts udiskie") : fail("niri does not start udiskie");
+}
+
+await main({ up, down, verify });

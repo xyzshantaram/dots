@@ -35,8 +35,8 @@
 import process from "node:process";
 import { $ } from "bun";
 import {
-  ARCH_UID, ARCH_USER, at, aurInstall, existsInArch, inArchSoft, main, needMount,
-  removeArch, say, writeArch, writeUserFile,
+  ARCH_UID, ARCH_USER, at, aurInstall, existsInArch, fail, inArchSoft, main, needMount,
+  ok, removeArch, say, writeArch, writeUserFile,
 } from "./lib.ts";
 
 const HOME = `/home/${ARCH_USER}`;
@@ -164,4 +164,18 @@ async function down(): Promise<void> {
   say("removed the AUR package");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const pkg = await inArchSoft("pacman", "-Qq", "voxtype-bin");
+  pkg.stdout.toString().trim() !== "" ? ok("voxtype installed") : fail("voxtype missing");
+  for (const f of [
+    "/home/" + ARCH_USER + "/.local/share/dictation/qml/DictationStrip.qml",
+    "/home/" + ARCH_USER + "/.local/share/dictation/bin/dictation-strip",
+    "/home/" + ARCH_USER + "/.local/share/dictation/bin/wtype",
+    "/usr/lib/systemd/system-sleep/50-dictation-npu.sh",
+    "/etc/security/limits.d/20-dictation.conf",
+  ]) {
+    (await existsInArch(f)) ? ok(`present: ${f.split("/").pop()}`) : fail(`missing: ${f}`);
+  }
+}
+
+await main({ up, down, verify });

@@ -14,7 +14,7 @@ My dotfiles, plus `bootstrap/`: the ladder that takes a fresh Arch install to a 
 - `bun run ladder creative up` is another optional one: ImageMagick, GIMP, Inkscape, Audacity, Kdenlive, OnlyOffice and Typst.
 - Idempotent on `up`, exact on `down`.
 - Depends on nothing outside itself — assets come from `files/`, never from another installed OS.
-- `verify.sh` is read-only and safe from either side.
+- `bun run ladder verify` is read-only and safe from either side.
 
 ```
 run.ts            the runner, for every ladder
@@ -25,7 +25,6 @@ bootstrap/
   software-dev/     developer toolchain — optional
   creative/         image, audio, video, office, typesetting — optional
   files/            vendored assets
-  verify.sh
 ```
 
 ## Decisions

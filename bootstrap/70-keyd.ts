@@ -10,7 +10,7 @@
  */
 import process from "node:process";
 import {
-  backupOnce, inArch, inArchSoft, main, needMount, readArch, removeArch,
+  backupOnce, fail, inArch, inArchSoft, main, needMount, ok, readArch, removeArch,
   restoreBackup, say, writeArch,
 } from "./lib.ts";
 
@@ -52,4 +52,12 @@ async function down(): Promise<void> {
   await removeArch(`${CONF}.bak`);
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const cfg = (await readArch("/etc/keyd/default.conf")) ?? "";
+  cfg === "" ? fail("keyd config is missing") : ok("keyd config present");
+  if (cfg !== "") /capslock = (leftmeta|overload\(meta)/.test(cfg) ? ok("CapsLock is Meta") : fail("CapsLock is not Meta");
+  const enabled = await inArchSoft("systemctl", "is-enabled", "keyd.service");
+  enabled.exitCode === 0 ? ok("keyd is enabled") : fail("keyd is not enabled");
+}
+
+await main({ up, down, verify });

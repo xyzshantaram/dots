@@ -33,8 +33,8 @@
 import { $ } from "bun";
 import process from "node:process";
 import {
-  ARCH_UUID, ROOT_MNT, at, inArch, inArchSoft, isMounted, main, needMount,
-  readArch, say, writeArch,
+  ARCH_UUID, ROOT_MNT, at, fail, inArch, inArchSoft, isMounted, main, needMount, note,
+  ok, readArch, say, writeArch,
 } from "./lib.ts";
 
 const FSTAB = "/etc/fstab";
@@ -315,4 +315,18 @@ async function down(): Promise<void> {
   say(`e.g. mount subvol=${SUBVOL} and btrfs subvolume delete each one`);
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const fstab = (await readArch("/etc/fstab")) ?? "";
+  fstab.includes("subvol=@snapshots")
+    ? ok("fstab has the @snapshots entry") : fail("fstab has no @snapshots entry");
+  const conf = (await readArch("/etc/snapper/configs/root")) ?? "";
+  if (conf === "") {
+    fail("no snapper root config");
+    return;
+  }
+  ok("snapper root config present");
+  /TIMELINE_CREATE="no"/.test(conf)
+    ? ok("hourly timeline snapshots are off") : note("timeline snapshots are enabled");
+}
+
+await main({ up, down, verify });

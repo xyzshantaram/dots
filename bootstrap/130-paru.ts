@@ -38,7 +38,7 @@
  */
 import process from "node:process";
 import {
-  ARCH_USER, LIVE, ROOT_MNT, asUser, inArch, inArchSoft, main, needMount, say,
+  ARCH_USER, LIVE, ROOT_MNT, asUser, fail, inArch, inArchSoft, main, needMount, ok, say,
 } from "./lib.ts";
 
 const WORK = "/var/tmp/paru";
@@ -190,4 +190,11 @@ async function down(): Promise<void> {
   await inArchSoft("rm", "-rf", WORK);
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  // Installed says nothing about whether it runs: paru links libalpm, and the
+  // prebuilt binary once needed a soname pacman no longer ships.
+  const v = await inArchSoft("paru", "--version");
+  v.exitCode === 0 ? ok("paru runs") : fail(`paru will not run (exit ${v.exitCode}); libalpm mismatch?`);
+}
+
+await main({ up, down, verify });

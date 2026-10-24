@@ -17,7 +17,8 @@
 import { $ } from "bun";
 import process from "node:process";
 import {
-  at, inArch, inArchSoft, main, needMount, removeArch, say, writeArch,
+  at, existsInArch, fail, inArch, inArchSoft, main, needMount, ok, removeArch, say,
+  writeArch,
 } from "./lib.ts";
 
 const VENDORED = `${import.meta.dir}/files/fonts/cmu`;
@@ -209,4 +210,13 @@ async function down(): Promise<void> {
   say("removed CMU fonts and the fontconfig drop-ins; cache rebuilt");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  for (const f of ["99-inter-sans.conf", "99-hinting-full.conf", "98-noto-emoji-fallback.conf"]) {
+    const p = `/etc/fonts/conf.d/${f}`;
+    (await existsInArch(p)) ? ok(`present: ${f}`) : fail(`missing: ${f}`);
+  }
+  const sans = (await inArchSoft("fc-match", "-f", "%{family}", "sans-serif")).stdout.toString();
+  sans.startsWith("Inter") ? ok("default sans-serif is Inter") : fail(`default sans-serif is ${sans}`);
+}
+
+await main({ up, down, verify });

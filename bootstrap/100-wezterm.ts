@@ -18,7 +18,9 @@
  * failure for a machine whose wallpapers have not been supplied yet.
  */
 import process from "node:process";
-import { ARCH_USER, main, needMount, removeArch, say, writeUserFile } from "./lib.ts";
+import {
+  ARCH_USER, existsInArch, fail, main, needMount, ok, removeArch, say, writeUserFile,
+} from "./lib.ts";
 
 const DEST = `/home/${ARCH_USER}/.config/wezterm/wezterm.lua`;
 
@@ -44,4 +46,9 @@ async function down(): Promise<void> {
   say("removed wezterm config");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const p = `/home/${ARCH_USER}/.config/wezterm/wezterm.lua`;
+  (await existsInArch(p)) ? ok("wezterm config present") : fail("wezterm config missing");
+}
+
+await main({ up, down, verify });

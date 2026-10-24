@@ -10,7 +10,7 @@
  */
 import { $ } from "bun";
 import process from "node:process";
-import { LIVE, ROOT_MNT, inArch, main, needMount, say } from "./lib.ts";
+import { LIVE, ROOT_MNT, fail, inArch, main, needMount, ok, say } from "./lib.ts";
 
 async function up(): Promise<void> {
   await needMount();
@@ -37,4 +37,9 @@ async function down(): Promise<void> {
   say("interactive helper, nothing to undo");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const r = await inArch("pacman", "-V").quiet().nothrow();
+  r.exitCode === 0 ? ok("pacman answers inside the target") : fail("pacman does not run inside the target");
+}
+
+await main({ up, down, verify });

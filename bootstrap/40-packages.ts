@@ -9,7 +9,7 @@
  * ---
  */
 import process from "node:process";
-import { inArch, inArchSoft, main, needMount, say } from "./lib.ts";
+import { fail, inArch, inArchSoft, main, needMount, note, ok, say } from "./lib.ts";
 
 /**
  * pipewire-alsa is the bridge from ALSA's `default` device to PipeWire, and
@@ -156,4 +156,14 @@ async function down(): Promise<void> {
   say("removed; orphans left in place on purpose");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  // pacman -T prints what is not installed, so the check is the whole group in
+  // one call rather than one pacman per package.
+  const critical = ["niri", "quickshell", "greetd", "keyd", "snapper", "udiskie", "gammastep", "fprintd", "fish"];
+  const r = await inArchSoft("pacman", "-T", ...critical);
+  const missing = r.stdout.toString().trim();
+  if (r.exitCode !== 0 && missing !== "") fail(`missing packages: ${missing.replace(/\n/g, " ")}`);
+  else ok("the core package set is installed");
+}
+
+await main({ up, down, verify });

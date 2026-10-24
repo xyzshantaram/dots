@@ -14,7 +14,8 @@
  */
 import process from "node:process";
 import {
-  ARCH_USER, inArch, inArchSoft, main, needMount, removeArch, say, writeUserFile,
+  ARCH_USER, existsInArch, fail, inArch, inArchSoft, main, needMount, ok, removeArch,
+  say, writeUserFile,
 } from "./lib.ts";
 
 const BASE = `/home/${ARCH_USER}/.config/fish`;
@@ -57,4 +58,11 @@ async function down(): Promise<void> {
   say("removed the four fish files; the account is otherwise untouched");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  for (const f of ["config.fish", "functions/fish_prompt.fish", "functions/fish_greeting.fish", "conf.d/git_prompt.fish"]) {
+    const p = `/home/${ARCH_USER}/.config/fish/${f}`;
+    (await existsInArch(p)) ? ok(`present: ${f}`) : fail(`missing: ${f}`);
+  }
+}
+
+await main({ up, down, verify });

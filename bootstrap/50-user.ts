@@ -15,8 +15,8 @@
  */
 import process from "node:process";
 import {
-  ARCH_UID, ARCH_USER, inArch, inArchSoft, main, needMount, removeArch, say,
-  writeArch,
+  ARCH_UID, ARCH_USER, existsInArch, fail, inArch, inArchSoft, main, needMount, ok,
+  removeArch, say, writeArch,
 } from "./lib.ts";
 
 const SUDOERS = "/etc/sudoers.d/10-wheel";
@@ -83,4 +83,20 @@ async function down(): Promise<void> {
   say("removed sudoers drop-in");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const pw = (await inArchSoft("getent", "passwd", ARCH_USER)).stdout.toString().trim();
+  if (pw === "") {
+    fail(`${ARCH_USER} does not exist`);
+    return;
+  }
+  ok(`${ARCH_USER} exists`);
+  pw.split(":")[6] === "/usr/bin/fish" ? ok("login shell is fish") : fail("login shell is not fish");
+
+  const groups = (await inArchSoft("id", "-nG", ARCH_USER)).stdout.toString().trim().split(" ");
+  const missing = ["wheel", "input", "uucp", "video"].filter((g) => !groups.includes(g));
+  missing.length === 0 ? ok("wheel, input, uucp, video") : fail(`missing groups: ${missing.join(", ")}`);
+
+  (await existsInArch("/etc/sudoers.d/10-wheel")) ? ok("wheel sudo drop-in") : fail("no wheel sudo drop-in");
+}
+
+await main({ up, down, verify });

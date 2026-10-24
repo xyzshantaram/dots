@@ -8,7 +8,7 @@
  * revisit: 2026-12-21
  * ---
  */
-import { existsInArch, inArch, main, needMount, say } from "./lib.ts";
+import { existsInArch, fail, inArch, main, needMount, ok, say } from "./lib.ts";
 
 async function up(): Promise<void> {
   await needMount();
@@ -34,4 +34,10 @@ async function down(): Promise<void> {
   say("keyring changes are idempotent, nothing to undo");
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  const ring = (await existsInArch("/etc/pacman.d/gnupg/pubring.kbx"))
+    || (await existsInArch("/etc/pacman.d/gnupg/pubring.gpg"));
+  ring ? ok("the pacman keyring is initialised") : fail("the pacman keyring is empty");
+}
+
+await main({ up, down, verify });

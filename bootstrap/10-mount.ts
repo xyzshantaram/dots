@@ -19,7 +19,7 @@
 import { $ } from "bun";
 import process from "node:process";
 import {
-  ARCH_UUID, ESP_MOUNT, ESP_UUID, LIVE, ROOT_MNT, isMounted, main, say,
+  ARCH_UUID, ESP_MOUNT, ESP_UUID, LIVE, ROOT_MNT, fail, isMounted, main, note, ok, say,
 } from "./lib.ts";
 
 const ESP_AT = `${ROOT_MNT}${ESP_MOUNT}`;
@@ -84,4 +84,14 @@ async function down(): Promise<void> {
   }
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  if (LIVE) {
+    note("the target is this system; there is nothing to mount");
+    return;
+  }
+  (await isMounted(ROOT_MNT)) ? ok(`${ROOT_MNT} is mounted`) : fail(`${ROOT_MNT} is not mounted`);
+  const esp = `${ROOT_MNT}${ESP_MOUNT}`;
+  (await isMounted(esp)) ? ok(`${esp} is mounted`) : fail(`${esp} is not mounted`);
+}
+
+await main({ up, down, verify });

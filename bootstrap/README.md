@@ -83,7 +83,7 @@ instead of `$ROOT_MNT`, and commands run directly instead of through
 `arch-chroot`. All of that lives in `lib.ts`: `at()` prefixes a target path,
 and `inArch()`/`asUser()` choose the runner. `needMount()` becomes a check that
 the running system is Arch-family, so pointing the ladder at the wrong machine
-still stops it. `verify.sh` already understood the running system.
+still stops it. `verify` already understood the running system.
 
 One step is guarded rather than merely adjusted: `10-mount.ts down` would
 otherwise try to unmount `/`.
@@ -149,7 +149,7 @@ service. Also optional, and removable on its own.
 ### Checking it
 
 ```
-sudo ./verify.sh
+bun run ladder verify
 ```
 
 Read-only, and safe to run from Fedora against the mounted target **or** from
@@ -234,7 +234,7 @@ compiler.
 
 The general rule: for anything linking a core Arch library, prefer a source
 build over `-bin`, and check the binary actually **runs** rather than trusting
-that it installed. `verify.sh` now does exactly that for paru.
+that it installed. `130-paru.ts verify` does exactly that for paru.
 
 ### AUR packages that work out their own source URL by scraping break quietly
 
@@ -530,8 +530,8 @@ That does **not** transfer to Fedora, whose greetd instead does
 
 The greeter is optional and fully reversible: `down` disables
 `greetd.service`, restores the shipped config and removes both packages, and
-tty1 console login comes back on the next boot. `verify.sh` reports its absence
-as a warning, not a failure.
+tty1 console login comes back on the next boot. `117-greetd.ts verify` reports
+its absence as a warning, not a failure.
 
 Two things worth knowing:
 
@@ -585,8 +585,8 @@ install time rather than only after the first update. That matters because
 systemd-boot does **not** check whether an entry's files exist — it assembles the
 menu from `loader/entries/` and fails only when the entry is chosen. An empty
 `previous` would therefore be a broken entry sitting in the boot menu, which is
-worse than no entry at all. `verify.sh` fails on any entry referencing a file
-that is not on the ESP.
+worse than no entry at all. `150-kernel-sync.ts verify` fails on any entry
+referencing a file that is not on the ESP.
 
 Microcode rides inside the initramfs, embedded by the `microcode` hook, so there
 is no `amd-ucode.img` to carry alongside it. Naming one would point an entry at

@@ -34,8 +34,8 @@
  */
 import process from "node:process";
 import {
-  at, inArch, inArchSoft, main, needMount, readArch, removeArch, say,
-  writeArch,
+  at, existsInArch, fail, inArch, inArchSoft, main, needMount, ok, readArch, removeArch,
+  say, writeArch,
 } from "./lib.ts";
 
 const CONF = "/etc/greetd/config.toml";
@@ -145,4 +145,12 @@ async function down(): Promise<void> {
   say(`removed ${PACKAGES.join(" ")}; tty1 login returns on next boot`);
 }
 
-await main({ up, down });
+async function verify(): Promise<void> {
+  ((await readArch("/etc/greetd/config.toml")) ?? "").includes("tuigreet")
+    ? ok("greetd runs tuigreet") : fail("greetd is not configured for tuigreet");
+  (await existsInArch("/usr/bin/tuigreet")) ? ok("tuigreet installed") : fail("tuigreet missing");
+  const enabled = await inArchSoft("systemctl", "is-enabled", "greetd.service");
+  enabled.exitCode === 0 ? ok("greetd enabled") : fail("greetd not enabled");
+}
+
+await main({ up, down, verify });
