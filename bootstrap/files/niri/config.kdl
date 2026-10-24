@@ -58,6 +58,15 @@ layout {
     }
 }
 
+// Spotify draws its own titlebar and window controls, and niri drawing its own
+// border and background behind them puts two edges in the same place — which
+// reads as a doubled frame. Turning niri's off for this app alone leaves
+// Spotify's, which is the one that cannot be removed.
+window-rule {
+    match app-id="com.spotify.Client"
+    draw-border-with-background false
+}
+
 // Round every window's corners. clip-to-geometry clips the window to the
 // rounded shape, so its own square corners do not show through.
 window-rule {

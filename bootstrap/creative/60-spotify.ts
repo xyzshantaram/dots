@@ -1,59 +1,71 @@
 /**
  * ---
  * script: 60-spotify.ts
- * desc: Installs Spotify from Flathub, and adds the Flathub remote if it is missing.
- * needs: 40-packages.ts up (flatpak), and network
- * up: flatpak remote-add flathub, then flatpak install com.spotify.Client
- * down: flatpak uninstall com.spotify.Client; the remote is left in place
+ * desc: Installs spotify-launcher, the native client that tracks Spotify's own apt repository.
+ * needs: 40-packages.ts up (base-devel, curl), and network on first launch
+ * up: pacman -S --needed spotify-launcher
+ * down: removes the package and the downloaded build under ~/.cache
  * revisit: 2026-12-21
  * ---
  *
- * Flatpak rather than the AUR. Spotify publishes a Debian package and no Arch
- * one, so the AUR options are repackagings that have historically gone stale
- * between upstream releases; Flathub is the vendor-approved channel and the one
- * that gets updated. It is also sandboxed, which is why the package is
- * com.spotify.Client and not "spotify".
+ * Not the flatpak, and not aur/spotify.
  *
- * The remote is added here rather than in the packages step because flatpak can
- * be installed without any remote configured, and a remote is a decision about
- * where software comes from — worth stating in the step that uses it. It is
- * left in place on the way down: removing it would break every other flatpak
- * anybody installed by hand.
+ * The flatpak is fully sandboxed, which is normally the point — but it also
+ * cannot preload a shared object, and the only fix for Spotify's white CEF
+ * title bar on a tiling Wayland compositor is an LD_PRELOAD shim (see
+ * AlpSha/spotify-no-titlebar). CEF draws that bar from inside its own browser
+ * process, so no compositor rule reaches it, and the sandbox is exactly what
+ * blocks the one mechanism that does. Two attempts at forcing it through
+ * XWayland did not help either, which is what that project's own notes predict.
+ *
+ * The AUR's spotify is a repackaging of Spotify's Debian build, and
+ * repackagings go stale between upstream releases. spotify-launcher is in the
+ * repositories and is neither: it is a small Rust client for Spotify's official
+ * apt repository, so the first launch downloads the vendor build and later
+ * launches keep it current. That is why it is preferred over the AUR here, and
+ * it is a reversal of the reasoning in an earlier version of this step.
+ *
+ * The first launch downloads about 100MB into ~/.cache/spotify-launcher, so it
+ * needs network and takes a moment. The shim is not installed by this step: it
+ * is a third-party build that writes a per-user .desktop, and keeping it out of
+ * the ladder means a rebuild does not silently pull a C API interposer along
+ * with a music player.
  */
-import { inArch, inArchSoft, main, needMount, say } from "../lib.ts";
+import { ARCH_USER, inArchSoft, main, needMount, removeArch, say } from "../lib.ts";
 
-const REMOTE = "flathub";
-const REPO = "https://dl.flathub.org/repo/flathub.flatpakrepo";
-const APP = "com.spotify.Client";
+const PKG = "spotify-launcher";
+const CACHE = `/home/${ARCH_USER}/.cache/spotify-launcher`;
 
 async function up(): Promise<void> {
   await needMount();
 
-  const remote = await inArch(
-    "flatpak", "remote-add", "--if-not-exists", "--system", REMOTE, REPO,
-  ).nothrow();
-  say(remote.exitCode === 0 ? `remote ${REMOTE} present` : "could not add the remote");
+  if ((await inArchSoft("pacman", "-Qq", PKG)).exitCode === 0) {
+    say(`${PKG} is already installed`);
+    return;
+  }
 
-  const install = await inArch(
-    "flatpak", "install", "--system", "--noninteractive", REMOTE, APP,
-  ).nothrow();
-  say(
-    install.exitCode === 0
-      ? `installed ${APP}`
-      : `${APP} did not install — see above; an existing install reports as an error`,
+  const installed = await inArchSoft(
+    "pacman", "-S", "--needed", "--noconfirm", PKG,
   );
+
+  if (installed.exitCode !== 0) {
+    say(`could not install ${PKG}; see above`);
+    return;
+  }
+
+  say(`installed ${PKG}`);
+  say("the first launch downloads the Spotify build from Spotify's apt repository");
+  say("run it once from the app launcher, then the titlebar shim can preload into it");
 }
 
 async function down(): Promise<void> {
   await needMount();
-  const removed = await inArchSoft(
-    "flatpak", "uninstall", "--system", "--noninteractive", APP,
-  );
-  say(
-    removed.exitCode === 0
-      ? `removed ${APP}`
-      : `${APP} was not installed; left the ${REMOTE} remote alone`,
-  );
+
+  const removed = await inArchSoft("pacman", "-Rns", "--noconfirm", PKG);
+  say(removed.exitCode === 0 ? `removed ${PKG}` : `${PKG} was not installed`);
+
+  await removeArch(CACHE);
+  say("removed the downloaded build; it is re-fetched on the next install");
 }
 
 await main({ up, down });
