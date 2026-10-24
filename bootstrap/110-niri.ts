@@ -37,6 +37,7 @@ const LAUNCHER_WANTS = `${HOME}/.config/systemd/user/graphical-session.target.wa
 
 /** Toggles PipeWire and the ALSA switch behind the ThinkPad mic LED together. */
 const MIC_MUTE = "/usr/local/bin/mic-mute";
+const BRIGHTNESS = "/usr/local/bin/brightness";
 
 async function installLauncher(): Promise<void> {
   if ((await inArchSoft("pacman", "-Q", LAUNCHER)).exitCode === 0) {
@@ -98,6 +99,19 @@ async function up(): Promise<void> {
   }
   say(`installed ${MIC_MUTE}`);
 
+  await writeArch(
+    BRIGHTNESS,
+    await Bun.file(`${import.meta.dir}/files/bin/brightness`).text(),
+    0o755,
+  );
+  const bSyntax = await inArchSoft("sh", "-n", BRIGHTNESS);
+  if (bSyntax.exitCode !== 0) {
+    say("brightness has a syntax error:");
+    process.stderr.write(bSyntax.stderr.toString());
+    process.exit(1);
+  }
+  say(`installed ${BRIGHTNESS}`);
+
   const validate = await asUserSoft("niri", "validate", "-c", DEST);
 
   if (validate.exitCode !== 0) {
@@ -125,6 +139,7 @@ async function down(): Promise<void> {
   say(`removed the ${LAUNCHER} unit link and package`);
 
   await removeArch(MIC_MUTE);
+  await removeArch(BRIGHTNESS);
   await removeArch(DEST);
   say("removed the mic-mute helper and the niri config");
 }
@@ -135,6 +150,7 @@ async function verify(): Promise<void> {
   const v = await inArchSoft("niri", "validate", "-c", cfg);
   v.exitCode === 0 ? ok("niri accepts config.kdl") : fail("niri rejects config.kdl");
   (await Bun.file(at("/usr/local/bin/mic-mute")).exists()) ? ok("mic-mute installed") : fail("mic-mute missing");
+  (await Bun.file(at("/usr/local/bin/brightness")).exists()) ? ok("brightness installed") : fail("brightness missing");
   const unit = `/home/${ARCH_USER}/.config/systemd/user/graphical-session.target.wants/vicinae.service`;
   (await Bun.file(at(unit)).exists()) ? ok("vicinae user unit enabled") : fail("vicinae user unit not enabled");
 }

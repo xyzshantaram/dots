@@ -11,10 +11,11 @@ Rectangle {
     id: root
 
     required property string label
+    property string glyph: ""
     property var command: []
     property bool armed: false
 
-    width: Math.max(caption.width + 44, 120)
+    width: Math.max(content.width + 44, 120)
     height: 40
     radius: Theme.radiusSmall
     color: armed ? Qt.rgba(1, 1, 1, 0.20) : Qt.rgba(1, 1, 1, 0.08)
@@ -23,13 +24,28 @@ Rectangle {
 
     Behavior on color { ColorAnimation { duration: 120 } }
 
-    Text {
-        id: caption
+    Row {
+        id: content
         anchors.centerIn: parent
-        text: root.armed ? root.label + "?" : root.label
-        color: Theme.text
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSize
+        spacing: 8
+
+        Text {
+            visible: root.glyph !== ""
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.glyph
+            color: Theme.text
+            font.family: Theme.iconFont
+            font.pixelSize: 22
+        }
+
+        Text {
+            id: caption
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.armed ? root.label + "?" : root.label
+            color: Theme.text
+            font.family: Theme.fontFamily
+            font.pixelSize: Theme.fontSize
+        }
     }
 
     MouseArea {

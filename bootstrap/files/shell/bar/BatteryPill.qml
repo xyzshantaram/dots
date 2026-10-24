@@ -24,10 +24,13 @@ Pill {
         : `Battery: ${Math.round(Battery.level * 100)}%` +
           (Battery.toFull ? `\n${Battery.toFull} to full` : "")
 
-    // White when there is plenty, orange as it empties, and back again as it
-    // fills. warmth, not blend: this is a level, not an attention score, and
-    // charging is not a state worth a colour of its own.
-    readonly property color tint: Situation.warmth(Situation.batteryScore(Battery.level * 100))
+    // Purple when there is plenty, orange as it empties, and back again as it
+    // fills. A level, not an attention score, and charging is not a state worth
+    // a colour of its own.
+    //
+    // On the surface, not the glyph: the pill carries the temperature and the
+    // icon and reading stay white.
+    attention: Situation.batteryScore(Battery.level * 100)
 
     // One reading at a time: hours on battery, percentage on a cable.
     readonly property string reading: Battery.onBattery
@@ -63,7 +66,7 @@ Pill {
                 return String.fromCodePoint(0xf0079 + step / 10)
             }
 
-            color: root.tint
+            color: Theme.text
             font.family: Theme.iconFont
             font.pixelSize: Theme.glyphSize
             verticalAlignment: Text.AlignVCenter
@@ -75,8 +78,20 @@ Pill {
     }
 
     Text {
+        // A bolt on the cable, to the right of the cells. Grey rather than the
+        // pill's colour: it is a fact about the cable, not a second reading.
+        visible: !Battery.onBattery
+        text: "\uf0e7"
+        color: Theme.textDim
+        font.family: Theme.iconFont
+        font.pixelSize: Theme.fontSizeLarge
+        Layout.leftMargin: 2
+        Layout.alignment: Qt.AlignVCenter
+    }
+
+    Text {
         text: root.reading
-        color: root.tint
+        color: Theme.text
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeSmall
         font.bold: true

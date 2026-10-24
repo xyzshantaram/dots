@@ -158,8 +158,8 @@ binds {
     // mic-mute flips the PipeWire source mute AND the ALSA capture switch, which
     // is what drives the ThinkPad mic LED (see 110-niri.ts and files/bin/mic-mute).
     XF86AudioMicMute     allow-when-locked=true { spawn "mic-mute"; }
-    XF86MonBrightnessUp   allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "+10%"; }
-    XF86MonBrightnessDown allow-when-locked=true { spawn "brightnessctl" "--class=backlight" "set" "10%-"; }
+    XF86MonBrightnessUp   allow-when-locked=true { spawn-sh "brightness up; qs -p /home/shan/.config/shell ipc call osd brightness"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn-sh "brightness down; qs -p /home/shan/.config/shell ipc call osd brightness"; }
 
     // Copilot key: keyd turns leftmeta+leftshift+f23 into a plain Pause press.
     // Dictation is installed by 170-dictation.ts.

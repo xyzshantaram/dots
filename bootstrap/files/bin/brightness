@@ -1,0 +1,72 @@
+#!/bin/sh
+# Adjust the brightness of the output the pointer is on.
+#
+# niri's focused output follows the pointer, so an external monitor gets its own
+# DDC/CI value instead of dimming the laptop panel. The internal panel has a
+# backlight class; an external one has no backlight device at all.
+#
+# The result is written to $XDG_RUNTIME_DIR/qs-brightness as "<output> <percent>".
+# The on-screen indicator reads that file, so nothing here needs to know the
+# shell exists and any caller gets the indicator for free.
+
+set -u
+
+step=${2:-10}
+case "${1:-}" in
+    up)   sign=+ ;;
+    down) sign=- ;;
+    *) echo "usage: brightness up|down [step]" >&2; exit 2 ;;
+esac
+
+state="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/qs-brightness"
+
+out=$(niri msg --json focused-output 2>/dev/null | sed -n 's/.*"name":"\([^"]*\)".*/\1/p')
+if [ -z "$out" ]; then
+    out=$(niri msg --json outputs 2>/dev/null | sed -n 's/.*"name":"\([^"]*\)".*/\1/p' | head -1)
+fi
+[ -n "$out" ] || exit 1
+
+pct=0
+case "$out" in
+    eDP-*|LVDS-*|DSI-*)
+        # brightnessctl spells the direction on the end: +10% and 10%-.
+        if [ "$sign" = "+" ]; then
+            brightnessctl --class=backlight set "+${step}%" >/dev/null 2>&1 || exit 1
+        else
+            brightnessctl --class=backlight set "${step}%-" >/dev/null 2>&1 || exit 1
+        fi
+        dev=$(ls /sys/class/backlight 2>/dev/null | head -1)
+        [ -n "$dev" ] || exit 1
+        now=$(cat "/sys/class/backlight/$dev/brightness")
+        max=$(cat "/sys/class/backlight/$dev/max_brightness")
+        [ "$max" -gt 0 ] 2>/dev/null || exit 1
+        pct=$((now * 100 / max))
+        ;;
+    *)
+        # The i2c bus that belongs to this connector, from the DRM device tree:
+        # /sys/class/drm/card0-DP-1/i2c-7, so the bus is 7.
+        bus=$(ls -d "/sys/class/drm/"*"-${out}/i2c-"* 2>/dev/null | head -1 | sed 's|.*/i2c-||')
+        [ -n "$bus" ] || exit 1
+
+        line=$(ddcutil --bus "$bus" getvcp 10 --brief 2>/dev/null)
+        cur=$(printf '%s\n' "$line" | awk '{print $4}')
+        max=$(printf '%s\n' "$line" | awk '{print $5}')
+        if [ -n "$cur" ] && [ -n "$max" ] && [ "$max" -gt 0 ] 2>/dev/null; then
+            delta=$((max * step / 100))
+            [ "$delta" -lt 1 ] && delta=1
+            if [ "$sign" = "+" ]; then new=$((cur + delta)); else new=$((cur - delta)); fi
+            [ "$new" -gt "$max" ] && new=$max
+            [ "$new" -lt 1 ] && new=1
+            pct=$((new * 100 / max))
+        else
+            # Unreadable monitor: still try the obvious write rather than
+            # refusing to change anything.
+            new=50
+            pct=50
+        fi
+        ddcutil --bus "$bus" setvcp 10 "$new" >/dev/null 2>&1 || exit 1
+        ;;
+esac
+
+printf '%s %s\n' "$out" "$pct" > "$state" 2>/dev/null || true
+printf '%s %s\n' "$out" "$pct"

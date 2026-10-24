@@ -8,14 +8,18 @@ import QtQuick.Layouts
 // Text cannot change weight part-way through, so the clock is three of them.
 // The seconds hug the minutes; the day and date sit a gap away.
 //
-// White, as asked. Situation.clockColour is where the evening warmth comes in.
+// White type on a surface that carries the evening warmth.
 Pill {
+    // The evening walk, now on the surface rather than the type. Purple at
+    // 22:00, orange by 09:00, and back to purple when the window ends.
+    attention: Math.pow(Situation.clockTint(ticker.now), Situation.eveningWeight)
+
     RowLayout {
         spacing: 1
 
         Text {
             text: Qt.formatDateTime(ticker.now, "HH:mm")
-            color: Situation.clockColour(ticker.now)
+            color: Theme.text
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeLarge
             font.bold: true
@@ -42,7 +46,7 @@ Pill {
 
         Text {
             text: Qt.formatDateTime(ticker.now, "ddd")
-            color: Situation.clockColour(ticker.now)
+            color: Theme.text
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize
             font.bold: true
@@ -59,7 +63,7 @@ Pill {
 
         Text {
             text: Qt.formatDateTime(ticker.now, "MM-dd")
-            color: Situation.clockColour(ticker.now)
+            color: Theme.text
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSize
             font.bold: true

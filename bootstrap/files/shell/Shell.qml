@@ -168,6 +168,13 @@ PanelWindow {
 
     Lock { }
 
+    Osd { }
+
+    IpcHandler {
+        target: "osd"
+        function brightness(): void { OsdService.showBrightness(); }
+    }
+
     IpcHandler {
         target: "lock"
         function open(): void { LockService.lock(); }

@@ -216,11 +216,13 @@ WlSessionLockSurface {
 
         LockAction {
             label: "Shut Down"
+            glyph: "\uDB81\uDC25"
             command: ["systemctl", "poweroff"]
         }
 
         LockAction {
             label: "Sleep"
+            glyph: "\uDB82\uDD04"
             command: ["systemctl", "hibernate"]
         }
     }

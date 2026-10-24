@@ -9,3 +9,4 @@ singleton Tuned 1.0 Tuned.qml
 singleton Keyboard 1.0 Keyboard.qml
 singleton Metrics 1.0 Metrics.qml
 singleton Net 1.0 Net.qml
+singleton OsdService 1.0 OsdService.qml

@@ -39,6 +39,24 @@ Singleton {
         return Qt.hsva(hue % 1, sat, val, 1)
     }
 
+    /**
+     * The pill surface, walking from its resting purple to the alert orange.
+     *
+     * The same 0…1 score as blend(), with the same meaning, but applied to the
+     * background instead of a glyph: the widget itself carries the temperature
+     * and the text on it stays white and grey.
+     */
+    function surface(score): color {
+        const t = Math.max(0, Math.min(1, score))
+        const a = Theme.surfacePill
+        const b = Theme.alert
+        return Qt.rgba(
+            a.r + (b.r - a.r) * t,
+            a.g + (b.g - a.g) * t,
+            a.b + (b.b - a.b) * t,
+            1)
+    }
+
     /** A value's position between two bounds, clamped. */
     function ramp(value, from, to): real {
         if (to === from) return 0
@@ -155,15 +173,5 @@ Singleton {
      */
     function loadColour(value): color {
         return warmth(loadScore(value * 100))
-    }
-
-    /**
-     * White, walking to the alert orange across the night.
-     *
-     * Deliberately not blend(): that ramp means "needs attention" and runs from
-     * purple, and the time of day should not be mistakable for a notification.
-     */
-    function clockColour(now): color {
-        return warmth(Math.pow(clockTint(now), eveningWeight))
     }
 }

@@ -20,7 +20,11 @@ Rectangle {
     property int paddingY: 4
     property int spacing: Theme.gap / 2
 
-    color: Theme.surfacePill
+    /// 0 is the resting purple, 1 the alert orange. Set by a pill whose value
+    /// means something; everything else leaves it at zero.
+    property real attention: 0
+
+    color: Situation.surface(attention)
     // Fully rounded, so it stays a pill at any height.
     radius: Theme.pillRadius
 
