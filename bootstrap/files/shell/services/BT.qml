@@ -36,6 +36,12 @@ Singleton {
 
     readonly property int connectedCount: known.filter((d) => d.connected).length
 
+    /** What is connected, as one line for the chip's second row. */
+    readonly property string connectedLabel: known
+        .filter((d) => d.connected)
+        .map((d) => d.name || d.address)
+        .join(", ")
+
     /**
      * What the panel offers to pair with: everything BlueZ has seen that is not
      * already ours. Empty until a scan has run, since a device only exists here
@@ -57,7 +63,15 @@ Singleton {
         scanProc.running = true
     }
 
+    /**
+     * Power the adapter, explicitly.
+     *
+     * `bluetoothctl power toggle` does not exist — 5.87 answers "Invalid
+     * argument toggle" — so the state to move to is spelled out rather than
+     * asked for as a flip.
+     */
     function toggleEnabled(): void {
+        powerProc.command = ["bluetoothctl", "power", root.enabled ? "off" : "on"]
         powerProc.running = true
     }
 
@@ -103,7 +117,7 @@ Singleton {
 
     Process {
         id: powerProc
-        command: ["bluetoothctl", "power", "toggle"]
+        command: []
         running: false
     }
 

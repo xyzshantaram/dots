@@ -57,28 +57,56 @@ PanelWindow {
     /** True while any float is open: what the mask and the catcher switch on. */
     readonly property bool floating: bar.anyFloatOpen
 
-    /**
-     * Whether the window should be taking input over the whole screen.
-     *
-     * Banners are not floats — they are their own item and they do not close on
-     * an outside click — but they hang below the strip like one, so the mask has
-     * to be opened for them too or they would be drawn and not clickable.
-     */
-    readonly property bool catching: floating || toasts.visible
-
     // One server, and this is the only shell running now that the old tree is
     // gone: it owns org.freedesktop.Notifications, which is why nothing else
     // may be spawned to claim it. Quickshell outlives niri's spawn list here —
     // the panel is passed this object rather than making a second one.
     NotificationServer {
         id: notifications
+
+        /**
+         * Track everything we are told about.
+         *
+         * A notification only appears in `trackedNotifications` — which is what
+         * both the banners and the panel's list read — once it is marked
+         * tracked, and Quickshell leaves that to the consumer so a server can
+         * also be a pass-through. This one is the only daemon on the bus, so
+         * everything that arrives here is meant to be drawn.
+         */
+        onNotification: (note) => {
+            note.tracked = true;
+        }
     }
 
+    /**
+     * The strip, plus whatever is hanging under it.
+     *
+     * A union of rectangles, not a whole-screen switch. Opening the screen for
+     * banners seemed reasonable until a notification arrived with no timeout:
+     * the mask stayed full-screen, the shell took every click and every key, and
+     * the machine had to be used from a TTY. The banner's own rectangle is
+     * enough for it to be clicked; the screen is only opened when a float really
+     * does need the whole surface.
+     */
     mask: Region {
         x: 0
         y: 0
         width: shell.width
-        height: shell.catching ? shell.height : Theme.barHeight
+        height: Theme.barHeight
+
+        Region {
+            x: 0
+            y: 0
+            width: shell.floating ? shell.width : 0
+            height: shell.floating ? shell.height : 0
+        }
+
+        Region {
+            x: toasts.x
+            y: toasts.y
+            width: toasts.visible ? toasts.width : 0
+            height: toasts.visible ? toasts.height : 0
+        }
     }
 
     Bar {

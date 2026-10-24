@@ -1,3 +1,4 @@
+import "../components"
 import "../core"
 import QtQuick
 import Quickshell
@@ -31,8 +32,19 @@ PopupWindow {
     property bool bluetoothOpen: false
     property bool powerOpen: false
 
+    /** Two chips and their gap make up the column exactly. */
+    readonly property int chipWidth: (implicitWidth - 36) / 2
+
     onVisibleChanged: Wifi.watching = visible && wifiOpen
     onWifiOpenChanged: Wifi.watching = visible && wifiOpen
+    /** Place the tooltip under whichever chip asked for one. */
+    function showTip(source): void {
+        tip.content = source.tip
+        const p = source.mapToItem(body, 0, source.height + 4)
+        tip.x = Math.max(8, Math.min(body.width - tip.width - 8, p.x))
+        tip.y = p.y
+    }
+
     onBluetoothOpenChanged: {
         if (visible && bluetoothOpen) BT.discover();
     }
@@ -44,330 +56,6 @@ PopupWindow {
     anchor.rect.x: root.anchorItem ? -(root.width - root.anchorItem.width) - 8 : 0
     anchor.rect.y: root.anchorItem ? root.anchorItem.height + 8 : 0
     anchor.adjustment: PopupAdjustment.SlideX
-
-    /** A toggle in the quick row: glyph, label, and whether it is on. */
-    component Chip: Rectangle {
-        id: chip
-
-        required property string glyph
-        required property string label
-        required property bool on
-        required property var activate
-
-        /** A second line under the label, for state in a few words. */
-        property string detail: ""
-        /** Its colour, so one chip can say something the others do not. */
-        property color detailColor: Theme.textDim
-        /** A chevron, for a chip that opens a list rather than toggling. */
-        property bool chevron: false
-        /** Whether that list is open; turns the chevron down. */
-        property bool expanded: false
-        /** What the chevron does. The rest of the chip still calls activate. */
-        property var expand: null
-        /** Shown on hover, for a label that a narrow chip cuts short. */
-        property string tip: ""
-
-        // Fixed, not implicit: the body is 336 wide with 14 either side, and
-        // two chips plus their gap have to add up to exactly that. Sized by
-        // their content they overran the column and the right margin vanished.
-        width: (root.implicitWidth - 36) / 2
-        height: chip.detail === "" ? 34 : 42
-        radius: Theme.radiusSmall
-        color: chipArea.containsMouse
-            ? (chip.on ? Theme.calm : Theme.surfacePill)
-            : (chip.on ? Theme.calmDeep : Theme.surface)
-        border.width: 1
-        border.color: chip.on ? Theme.calmBright : Theme.border
-
-        Text {
-            id: chipGlyph
-
-            anchors.left: parent.left
-            anchors.leftMargin: 10
-            anchors.verticalCenter: parent.verticalCenter
-            text: chip.glyph
-            color: chip.on ? Theme.text : Theme.textMuted
-            font.family: Theme.iconFont
-            font.pixelSize: Theme.iconSize
-        }
-
-        Column {
-            id: chipText
-
-            anchors.left: chipGlyph.right
-            anchors.leftMargin: 8
-            anchors.right: chip.chevron ? chevronBox.left : parent.right
-            anchors.rightMargin: chip.chevron ? 4 : 8
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 1
-
-            Text {
-                width: parent.width
-                text: chip.label
-                color: chip.on ? Theme.text : Theme.textMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
-                elide: Text.ElideRight
-            }
-
-            Text {
-                visible: chip.detail !== ""
-                width: parent.width
-                text: chip.detail
-                color: chip.detailColor
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSizeSmall
-                elide: Text.ElideRight
-            }
-        }
-
-        // Its own target, not part of the whole-chip click: the chip toggles a
-        // radio, the chevron opens the list under it, and they are different
-        // actions on the same 150px surface.
-        Item {
-            id: chevronBox
-
-            visible: chip.chevron
-            // The chip's own MouseArea is declared after this one and would
-            // otherwise swallow every click and hover meant for the chevron.
-            z: 2
-            anchors.right: parent.right
-            anchors.rightMargin: 3
-            anchors.verticalCenter: parent.verticalCenter
-            width: 30
-            height: 26
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 7
-                color: chevronArea.containsMouse ? Theme.surfacePill : "transparent"
-            }
-
-            Text {
-                anchors.centerIn: parent
-                text: chip.expanded ? "\uf078" : "\uf054"   // chevron-down / right
-                color: chip.on ? Theme.text : Theme.textDim
-                font.family: Theme.iconFont
-                font.pixelSize: Theme.fontSize + 3
-            }
-
-            MouseArea {
-                id: chevronArea
-                anchors.fill: parent
-                anchors.margins: -3
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: {
-                    if (chip.expand) chip.expand();
-                }
-            }
-        }
-
-        MouseArea {
-            id: chipArea
-
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: chip.activate()
-            onEntered: {
-                if (chip.tip === "") return;
-                tip.content = chip.tip;
-                const p = chip.mapToItem(body, 0, chip.height + 4);
-                tip.x = Math.max(8, Math.min(body.width - tip.width - 8, p.x));
-                tip.y = p.y;
-            }
-            onExited: tip.content = ""
-        }
-    }
-
-    /**
-     * A switch, for a radio that can be on or off.
-     *
-     * Deliberately larger than the 11px heading it sits beside: this is the
-     * control for the list under it, and it should be the easiest thing in the
-     * row to hit.
-     */
-    component Switch: Item {
-        id: sw
-
-        required property bool on
-        required property var toggle
-
-        width: 40
-        height: 22
-
-        Rectangle {
-            anchors.fill: parent
-            radius: height / 2
-            color: sw.on ? Theme.alert : Theme.surface
-            border.width: 1
-            border.color: sw.on ? Theme.alert : Theme.border
-
-            Behavior on color { ColorAnimation { duration: 160 } }
-
-            Rectangle {
-                width: 16
-                height: 16
-                radius: 8
-                y: 2
-                x: sw.on ? parent.width - width - 3 : 3
-                color: sw.on ? Theme.text : Theme.textMuted
-
-                Behavior on x { NumberAnimation { duration: 160 } }
-            }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            anchors.margins: -4
-            cursorShape: Qt.PointingHandCursor
-            onClicked: sw.toggle()
-        }
-    }
-
-    /** A turning arc, for work that is under way and cannot say how long. */
-    component Spinner: Text {
-        id: spinner
-
-        text: "\uf110"   // spinner
-        color: Theme.textMuted
-        font.family: Theme.iconFont
-        font.pixelSize: Theme.fontSize + 3
-
-        NumberAnimation on rotation {
-            running: spinner.visible
-            from: 0
-            to: 360
-            duration: 900
-            loops: Animation.Infinite
-        }
-    }
-
-    /**
-     * One row in a list of things you can join: outlined, orange while it is the
-     * current one, with the action on the right.
-     *
-     * The action is a chevron to join and a cross to leave — and the cross
-     * becomes a check on the first click, because disconnecting on one stray
-     * click is not something to make easy.
-     */
-    component Entry: Column {
-        id: entry
-
-        required property string title
-        required property bool isActive
-        required property string glyph
-        /** Small text before the action, for a lock or a state. */
-        property string hint: ""
-        required property var action
-
-        property bool confirming: false
-        /** Whether the action on the current row is something to confirm. */
-        property bool confirms: true
-        /** The glyph on the current row: a cross, or a tick where a row is not
-         * something you can leave. */
-        property string activeGlyph: "\uf00d"
-
-        width: column.width
-        spacing: 4
-
-        Rectangle {
-            id: entryRow
-
-            width: parent.width
-            height: 36
-            radius: 10
-            // A surface rather than an outline: every row is a shade darker than
-            // the panel, and only the current one is marked out in orange.
-            color: Theme.surface
-            border.width: entry.isActive ? 2 : 0
-            border.color: Theme.alert
-
-            Text {
-                id: entryGlyph
-
-                anchors.left: parent.left
-                anchors.leftMargin: 10
-                anchors.verticalCenter: parent.verticalCenter
-                text: entry.glyph
-                color: entry.isActive ? Theme.text : Theme.textMuted
-                font.family: Theme.iconFont
-                font.pixelSize: Theme.iconSize
-            }
-
-            Text {
-                anchors.left: entryGlyph.right
-                anchors.leftMargin: 10
-                anchors.right: entryHint.left
-                anchors.rightMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                text: entry.title
-                color: entry.isActive ? Theme.text : Theme.textMuted
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSize
-                elide: Text.ElideRight
-            }
-
-            Text {
-                id: entryHint
-
-                anchors.right: entryAction.left
-                anchors.rightMargin: 8
-                anchors.verticalCenter: parent.verticalCenter
-                text: entry.hint
-                color: entry.isActive ? Theme.alert : Theme.textDim
-                font.family: entry.hint === "\uf023" ? Theme.iconFont : Theme.fontFamily
-                font.pixelSize: Theme.fontSizeSmall
-            }
-
-            Text {
-                id: entryAction
-
-                anchors.right: parent.right
-                anchors.rightMargin: 10
-                anchors.verticalCenter: parent.verticalCenter
-                text: entry.isActive ? (entry.confirming ? "\uf00c" : entry.activeGlyph) : "\uf054"
-                color: entry.isActive ? Theme.alert : Theme.textDim
-                font.family: Theme.iconFont
-                font.pixelSize: entry.confirming ? Theme.fontSize + 3 : Theme.fontSizeSmall
-                font.bold: entry.confirming
-
-                MouseArea {
-                    anchors.fill: parent
-                    anchors.margins: -8
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: entry.click()
-                }
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: entry.click()
-            }
-        }
-
-        Timer {
-            id: confirm
-            interval: 2500
-            onTriggered: entry.confirming = false
-        }
-
-        function click(): void {
-            if (!entry.isActive || !entry.confirms) {
-                entry.action();
-                return;
-            }
-            if (entry.confirming) {
-                entry.confirming = false;
-                entry.action();
-                return;
-            }
-            entry.confirming = true;
-            confirm.restart();
-        }
-    }
 
     Rectangle {
         id: body
@@ -398,9 +86,12 @@ PopupWindow {
                 spacing: 8
 
                 Chip {
+                    width: root.chipWidth
                     glyph: "\uDB82\uDD2D"   // wifi_strength_off, standing in for the radio
                     label: "Wi-Fi"
-                    on: Net.radioEnabled
+                    detail: Wifi.current
+                    detailColor: Theme.alert
+                    on: Wifi.enabled
                     chevron: true
                     expanded: root.wifiOpen
                     expand: () => root.wifiOpen = !root.wifiOpen
@@ -411,8 +102,11 @@ PopupWindow {
                 }
 
                 Chip {
+                    width: root.chipWidth
                     glyph: "\uDB80\uDCB1"   // bluetooth_connect
                     label: "Bluetooth"
+                    detail: BT.connectedLabel
+                    detailColor: Theme.alert
                     on: BT.enabled
                     chevron: true
                     expanded: root.bluetoothOpen
@@ -425,6 +119,7 @@ PopupWindow {
                 spacing: 8
 
                 Chip {
+                    width: root.chipWidth
                     glyph: "\uf0e7"         // bolt
                     label: Tuned.label
                     on: Tuned.active === "throughput-performance"
@@ -432,10 +127,13 @@ PopupWindow {
                     expanded: root.powerOpen
                     expand: () => root.powerOpen = !root.powerOpen
                     tip: `Power profile: ${Tuned.label}`
+                    onTipRequested: (source) => root.showTip(source)
+                    onTipCleared: tip.content = ""
                     activate: () => root.powerOpen = !root.powerOpen
                 }
 
                 Chip {
+                    width: root.chipWidth
                     glyph: "\uf017"         // clock
                     label: "Caffeine"
                     on: power.caffeine
@@ -447,6 +145,7 @@ PopupWindow {
                 spacing: 8
 
                 Chip {
+                    width: root.chipWidth
                     glyph: "\uDB80\uDF6C"   // microphone
                     label: "Dictation"
                     detail: Dictation.byline
@@ -456,6 +155,7 @@ PopupWindow {
                 }
 
                 Chip {
+                    width: root.chipWidth
                     glyph: "\uf0f3"         // bell
                     label: "Don't disturb"
                     on: root.server?.doNotDisturb ?? false
@@ -521,17 +221,17 @@ PopupWindow {
                     }
 
                     Switch {
-                        on: Net.radioEnabled
-                        toggle: () => {
-                            if (Net.radio) Net.radio.enabled = !Net.radio.enabled
-                        }
+                        on: Wifi.enabled
+                        toggle: () => Wifi.radio(!Wifi.enabled)
                     }
                 }
             }
 
             Text {
                 visible: root.wifiOpen && Wifi.networks.length === 0
-                text: Wifi.scanning ? "Scanning…" : "Nothing in range"
+                text: !Wifi.enabled ? "Wi-Fi is off"
+                    : Wifi.scanning ? "Scanning…"
+                    : "Nothing in range"
                 color: Theme.textDim
                 font.family: Theme.fontFamily
                 font.pixelSize: Theme.fontSizeSmall

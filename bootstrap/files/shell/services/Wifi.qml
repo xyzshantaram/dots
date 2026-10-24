@@ -19,6 +19,28 @@ Singleton {
     /** [{ ssid, signal, secured, active }] — active first, then by signal. */
     property var networks: []
 
+    /**
+     * The SSID we are associated with, from its own cheap read.
+     *
+     * Not derived from `networks`: that list only exists after a scan, and a
+     * scan only happens while the panel is open — so a chip bound to it was
+     * blank exactly when it was shut, which is most of the time.
+     */
+    property string current: ""
+
+    /**
+     * The radio, read from NetworkManager rather than from the Networking
+     * module: that module reports no wifi device on this machine even while one
+     * is associated, so a chip bound to it stays unlit on a working connection.
+     */
+    property bool enabled: true
+
+    function radio(on: boolean): void {
+        radioProc.command = ["nmcli", "radio", "wifi", on ? "on" : "off"];
+        radioProc.running = true;
+        enabled = on;
+    }
+
     /** The network that wants a password, "" when none does. */
     property string needsPassword: ""
 
@@ -147,8 +169,49 @@ Singleton {
             "device", "wifi", "list", "--rescan", "yes",
         ]
         stdout: StdioCollector {
-            onStreamFinished: root.absorb(this.text)
+            onStreamFinished: {
+                root.absorb(this.text);
+                // The radio can be switched from elsewhere, so every scan
+                // re-reads it rather than trusting the last value it set.
+                radioState.running = true;
+            }
         }
+    }
+
+    Process {
+        id: active
+        command: ["nmcli", "-t", "-f", "IN-USE,SSID", "device", "wifi", "list"]
+        running: true
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const line = this.text.split("\n").find((l) => l.startsWith("*"));
+                root.current = line ? root.fields(line)[1] : "";
+            }
+        }
+    }
+
+    Timer {
+        interval: 15000
+        running: true
+        repeat: true
+        onTriggered: active.running = true
+    }
+
+    Process {
+        id: radioState
+        command: ["nmcli", "-t", "radio", "wifi"]
+        running: true
+
+        stdout: SplitParser {
+            onRead: (line) => root.enabled = line.trim() === "enabled"
+        }
+    }
+
+    Process {
+        id: radioProc
+        command: []
+        onExited: radioState.running = true
     }
 
     Process {
@@ -161,6 +224,7 @@ Singleton {
 
         onExited: (code) => {
             root.busy = "";
+            active.running = true;
             if (code === 0) {
                 root.needsPassword = "";
                 root.scan();
