@@ -1,0 +1,13 @@
+[Unit]
+Description=Power-button light while the fingerprint reader waits for a finger
+After=fprintd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/fpr-led
+Restart=always
+RestartSec=2
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

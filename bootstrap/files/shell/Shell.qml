@@ -1,11 +1,14 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.Notifications
 import Quickshell.Wayland
 import "bar"
 import "core"
 import "float"
+import "lock"
 import "notices"
+import "services"
 
 // The shell's only window, and the reason the floats work.
 //
@@ -161,5 +164,58 @@ PanelWindow {
         anchorItem: bar.menuDownItem
         visible: bar.menuDownItem.menuOpen
         server: notifications
+    }
+
+    Lock { }
+
+    IpcHandler {
+        target: "lock"
+        function open(): void { LockService.lock(); }
+    }
+
+    // niri answered its first output query: outputs are configured and the
+    // shell is drawing. Keyed to niri's pid, so a config reload does not chirp
+    // but a new session does.
+    Connections {
+        target: Niri
+        function onOutputsChanged() {
+            if (Niri.outputs.length === 0) return;
+            cuePlayer.running = true;
+        }
+    }
+
+    Process {
+        id: cuePlayer
+        command: ["sh", "-c",
+            "m=\"$XDG_RUNTIME_DIR/niri-ready-cue-$(pgrep -x niri | head -1)\"; [ -e \"$m\" ] && exit 0; touch \"$m\"; sleep 1.5; exec paplay \"$HOME/Downloads/niri-boot-chime.mp3\""]
+    }
+
+    // Both edges of one signal. `true` is emitted before the snapshot, so
+    // locking here covers the lid, the idle timer, UPower and a manual
+    // `systemctl hibernate` alike — every path goes through logind. `false` is
+    // the way back, and the shell is frozen with the system rather than
+    // restarted, so it is still holding the lock when the machine resumes.
+    Process {
+        id: resumeWatch
+        command: ["dbus-monitor", "--system",
+            "type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'"]
+        running: true
+        stdout: SplitParser {
+            onRead: line => {
+                if (line.includes("boolean true")) LockService.lock();
+                else if (line.includes("boolean false")) resumeDelay.restart();
+            }
+        }
+    }
+
+    Timer {
+        id: resumeDelay
+        interval: 1500
+        onTriggered: resumePlayer.running = true
+    }
+
+    Process {
+        id: resumePlayer
+        command: ["paplay", Quickshell.env("HOME") + "/Downloads/resume-success-sound.mp3"]
     }
 }

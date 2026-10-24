@@ -32,7 +32,7 @@
 import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import {
-  ARCH_USER, inArchSoft, main, needMount, removeArch, say, writeUserFile,
+  ARCH_USER, inArchSoft, main, needMount, removeArch, say, writeArch, writeUserFile,
 } from "./lib.ts";
 
 const SRC = `${import.meta.dir}/files/shell`;
@@ -61,6 +61,10 @@ async function up(): Promise<void> {
   }
   say(`installed ${files.length} files into ${DEST}`);
 
+  // The lock's PamContext names this service.
+  await writeArch("/etc/pam.d/qslock", "auth include login\n");
+  say("wrote /etc/pam.d/qslock");
+
   if ((await inArchSoft("test", "-d", LEGACY)).exitCode === 0) {
     await removeArch(LEGACY);
     say(`removed the old ${LEGACY}, so a bare \`qs\` cannot load it`);
@@ -74,6 +78,7 @@ async function down(): Promise<void> {
   await needMount();
 
   await removeArch(DEST);
+  await removeArch("/etc/pam.d/qslock");
   say("removed the quickshell config");
 }
 

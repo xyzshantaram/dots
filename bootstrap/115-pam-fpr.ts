@@ -28,7 +28,7 @@
  */
 import process from "node:process";
 import {
-  ARCH_USER, backupOnce, inArchSoft, main, needMount, readArch, removeArch,
+  ARCH_USER, backupOnce, inArch, inArchSoft, main, needMount, readArch, removeArch,
   restoreBackup, say, writeArch,
 } from "./lib.ts";
 
@@ -98,11 +98,30 @@ async function up(): Promise<void> {
     process.exit(1);
   }
   say("pwfeedback enabled");
+
+  await writeArch(
+    "/usr/local/bin/fpr-led",
+    await Bun.file(`${import.meta.dir}/files/fpr/fpr-led`).text(),
+    0o755,
+  );
+  await writeArch(
+    "/etc/systemd/system/fpr-led.service",
+    await Bun.file(`${import.meta.dir}/files/fpr/fpr-led.service`).text(),
+  );
+  await inArch("systemctl", "enable", "--now", "fpr-led.service");
+  say("fpr-led lights the power button while the reader waits");
+
   say(`after first boot, as ${ARCH_USER}: fprintd-enroll`);
 }
 
 async function down(): Promise<void> {
   await needMount();
+
+  await inArchSoft("systemctl", "disable", "--now", "fpr-led.service");
+  for (const rel of ["/usr/local/bin/fpr-led", "/etc/systemd/system/fpr-led.service"]) {
+    await removeArch(rel);
+  }
+
   for (const file of [LOCAL_LOGIN, SUDO]) {
     say(
       (await restoreBackup(file))

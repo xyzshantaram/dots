@@ -1,9 +1,9 @@
 /**
  * ---
  * script: 145-hibernate.ts
- * desc: Makes the Arch side hibernate-only and makes hibernation resume: resume hook in the initramfs, wake-source mask, suspend->hibernate redirect, logind lid handling.
- * needs: 10-mount.ts up, 40-packages.ts up, SWAP_UUID in .env
- * up: adds `resume` to mkinitcpio HOOKS and rebuilds, installs the wake-source mask, sleep and logind drop-ins, and the image_size tmpfile
+ * desc: Makes the Arch side hibernate-only and makes hibernation resume: resume hook in the initramfs, suspend->hibernate redirect, logind lid handling.
+ * needs: 10-mount.ts up, 40-packages.ts up, KERNEL in .env
+ * up: adds `resume` to mkinitcpio HOOKS and rebuilds, installs the sleep and logind drop-ins, and the image_size tmpfile
  * down: restores mkinitcpio.conf, removes the helpers, drop-ins and tmpfiles, rebuilds the initramfs
  * revisit: 2026-12-21
  * ---
@@ -63,34 +63,21 @@ async function up(): Promise<void> {
   say("initramfs rebuilt");
 
   await writeArch(
-    "/usr/local/bin/hibernate-wakeup-mask",
-    await Bun.file(`${import.meta.dir}/files/sleep/hibernate-wakeup-mask`).text(),
-    0o755,
-  );
-  await writeArch(
-    "/etc/hibernate-wakeup-mask.list",
-    await Bun.file(`${import.meta.dir}/files/sleep/hibernate-wakeup-mask.list`).text(),
-  );
-  say("installed wake-source mask");
-
-  await writeArch(
     "/etc/systemd/system/systemd-suspend.service.d/10-suspend-is-hibernate.conf",
     `# Any caller that asks to suspend gets a hibernation instead.
-# AllowSuspend stays enabled so this unit stays reachable; the wake-source
-# mask runs first so a wake event cannot roll the hibernation back.
+# AllowSuspend stays enabled so this unit stays reachable.
 [Service]
-ExecStartPre=/usr/local/bin/hibernate-wakeup-mask
 ExecStart=
 ExecStart=/usr/lib/systemd/systemd-sleep hibernate
 `,
   );
   await writeArch(
-    "/etc/systemd/system/systemd-hibernate.service.d/10-wakeup-mask.conf",
-    `# Mask the wake sources that abort hibernation during power-off.
-[Service]
-ExecStartPre=/usr/local/bin/hibernate-wakeup-mask
-`,
+    "/usr/lib/systemd/system-sleep/50-hibernate-led",
+    await Bun.file(`${import.meta.dir}/files/sleep/50-hibernate-led`).text(),
+    0o755,
   );
+  say("installed the hibernate LED blinker");
+
   await writeArch(
     "/etc/systemd/sleep.conf.d/10-hibernate-mode.conf",
     `# Write the image and power off, rather than handing S4 to the firmware.
@@ -151,10 +138,8 @@ async function down(): Promise<void> {
   );
 
   for (const rel of [
-    "/usr/local/bin/hibernate-wakeup-mask",
-    "/etc/hibernate-wakeup-mask.list",
     "/etc/systemd/system/systemd-suspend.service.d/10-suspend-is-hibernate.conf",
-    "/etc/systemd/system/systemd-hibernate.service.d/10-wakeup-mask.conf",
+    "/usr/lib/systemd/system-sleep/50-hibernate-led",
     "/etc/systemd/sleep.conf.d/10-hibernate-mode.conf",
     "/etc/systemd/logind.conf.d/10-hibernate.conf",
     "/etc/tmpfiles.d/hibernation-image-size.conf",

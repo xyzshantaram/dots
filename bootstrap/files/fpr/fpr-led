@@ -1,0 +1,49 @@
+#!/bin/sh
+# Light the power button while the fingerprint reader is verifying.
+#
+# finger-needed is not usable on this sensor. During a PAM verification it only
+# ever emits finger-present changes and VerifyStatus; finger-needed is never
+# changed, so polling it lights nothing. The window is VerifyStart to the final
+# VerifyStatus, which is what this watches.
+#
+# It runs as root because /sys/class/leds/*/brightness is root-only, and
+# BecomeMonitor on the system bus is root-only too.
+
+set -u
+
+LED=/sys/class/leds/tpacpi::power/brightness
+cur=0
+WATCH=
+
+lit()  { [ "$cur" = 1 ] || { cur=1; echo 255 > "$LED" 2>/dev/null; }; }
+dark() { [ "$cur" = 0 ] || { cur=0; echo 0 > "$LED" 2>/dev/null; }; }
+
+cleanup() { echo 0 > "$LED" 2>/dev/null || true; }
+
+# The exit is what matters: a handler that only writes the LED returns to the
+# read loop, and the unit then ignores SIGTERM until systemd's stop timeout.
+trap 'cleanup; exit 0' INT TERM
+trap cleanup EXIT
+
+busctl --system monitor net.reactivated.Fprint --json=short 2>/dev/null | {
+    while read -r line; do
+        case "$line" in
+            *'"member":"VerifyStart"'*)
+                lit
+                # fprintd does not always send a final status, so never leave
+                # the light on if one does not arrive.
+                kill "$WATCH" 2>/dev/null
+                ( sleep 40; echo 0 > "$LED" 2>/dev/null ) &
+                WATCH=$!
+                ;;
+            *'"member":"VerifyStatus"'*)
+                case "$line" in
+                    *verify-match*|*verify-no-match*|*verify-disconnected*|*verify-unknown-error*)
+                        kill "$WATCH" 2>/dev/null
+                        dark
+                        ;;
+                esac
+                ;;
+        esac
+    done
+}

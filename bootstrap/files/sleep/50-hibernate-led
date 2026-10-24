@@ -1,0 +1,47 @@
+#!/bin/sh
+# Blink the power-button light and the lid i-light while hibernation is being
+# written and the machine is on its way down, so a long one does not read as a
+# hang. They go dark with the power.
+#
+# The charging light is not here: it has no led-class entry, and the EC owns it.
+# Neither of these two has a kernel timer trigger, so the blink is a userspace
+# loop. systemd-sleep runs this with pre|post and the operation name.
+
+set -u
+
+LEDS="/sys/class/leds/tpacpi::power /sys/class/leds/tpacpi::lid_logo_dot"
+PIDFILE=/run/hibernate-led.pid
+
+set_leds() {
+    for l in $LEDS; do echo "$1" > "$l/brightness" 2>/dev/null || true; done
+}
+
+stop() {
+    [ -e "$PIDFILE" ] || return 0
+    kill "$(cat "$PIDFILE")" 2>/dev/null || true
+    rm -f "$PIDFILE"
+}
+
+case "${1:-}" in
+    pre)
+        [ "${2:-}" = "hibernate" ] || exit 0
+        stop
+        # Detached, because the pre hook has to return before the snapshot can
+        # start. The pid lives in /run, which comes back with the image, so
+        # post can still kill it after the resume.
+        setsid sh -c "while :; do
+            for l in $LEDS; do echo 255 > \$l/brightness; done
+            sleep 0.32
+            for l in $LEDS; do echo 0 > \$l/brightness; done
+            sleep 0.32
+        done" >/dev/null 2>&1 &
+        echo $! > "$PIDFILE"
+        ;;
+    post)
+        stop
+        # Resting state on this machine: the lid i-light on, the power light off.
+        echo 255 > /sys/class/leds/tpacpi::lid_logo_dot/brightness 2>/dev/null || true
+        echo 0 > /sys/class/leds/tpacpi::power/brightness 2>/dev/null || true
+        ;;
+esac
+exit 0
