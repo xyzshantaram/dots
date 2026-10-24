@@ -5,6 +5,7 @@ import Quickshell.Services.Notifications
 import Quickshell.Wayland
 import "bar"
 import "core"
+import "dock"
 import "float"
 import "lock"
 import "notices"
@@ -133,6 +134,13 @@ PanelWindow {
         id: toasts
         server: notifications
         // A menu and a banner compete for the same corner; the menu wins.
+        suppressed: shell.floating
+    }
+
+    // The dock is its own bottom-anchored surface, so it needs nothing from this
+    // window but whether a float is open.
+    Dock {
+        id: dock
         suppressed: shell.floating
     }
 
