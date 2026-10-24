@@ -51,8 +51,17 @@ Singleton {
      * down as it fills and a draining one warms up as it empties. The caller
      * decides which of the two it is showing.
      */
+    /**
+     * Battery. Full is calm, empty is attention — the direction is the same
+     * whether the machine is plugged in or not, so a charging battery calms
+     * down as it fills and a draining one warms up as it empties.
+     *
+     * Written the right way round this time: the ramp runs up from 11% to 55%,
+     * and the score is its inverse, so 6% reads as attention rather than as
+     * perfect calm.
+     */
     function batteryScore(percent): real {
-        return ramp(percent, 11, 55)
+        return 1 - ramp(percent, 11, 55)
     }
 
     /**

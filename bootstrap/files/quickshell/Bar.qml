@@ -107,6 +107,7 @@ Scope {
                 CapsLock {}
                 Volume { id: volume }
                 Connectivity { id: bt }
+                BatteryPill {}
             }
 
             // The mixer is its own popup window rather than a panel in the

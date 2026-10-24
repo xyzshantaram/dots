@@ -26,7 +26,9 @@ Pill {
             // Grey: it is the part that changes every second, and the eye
             // should not be pulled to it.
             text: `:${Qt.formatDateTime(ticker.now, "ss")}`
-            color: Situation.clockColour(ticker.now)
+            // Grey, like the year: the recessed parts stay neutral while the
+            // bold ones carry the time of day.
+            color: Theme.textMuted
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeLarge
         }

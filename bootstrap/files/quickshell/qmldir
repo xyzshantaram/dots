@@ -2,6 +2,7 @@ singleton Theme 1.0 Theme.qml
 singleton Situation 1.0 Situation.qml
 singleton Hover 1.0 Hover.qml
 Bar 1.0 Bar.qml
+BatteryPill 1.0 BatteryPill.qml
 CapsLock 1.0 CapsLock.qml
 Clock 1.0 Clock.qml
 Connectivity 1.0 Connectivity.qml
