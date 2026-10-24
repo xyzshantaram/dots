@@ -66,15 +66,26 @@ Singleton {
         list.running = true;
     }
 
+    /** Saved connection names, so a network we already have a key for does not
+     *  ask for one again. */
+    property var saved: []
+
     /**
      * Connect, with a password if one was given.
      *
-     * Without a password this is the attempt that finds out whether one is
-     * needed: NetworkManager answers "Secrets were required" for a network it
-     * has no key for, and that is a better test than guessing from the security
-     * string, which says WPA2 for a network we already have saved.
+     * A secured network with no saved profile asks for the passphrase before
+     * trying. The first version instead attempted the connection and waited for
+     * NetworkManager to answer "Secrets were required"; that answer never came
+     * back in the form expected, so the field never appeared and clicking a
+     * secured network did nothing visible at all.
      */
     function connect(ssid: string, password: string): void {
+        const known = networks.find((n) => n.ssid === ssid);
+        if (password === "" && known?.secured && root.saved.indexOf(ssid) === -1) {
+            needsPassword = ssid;
+            return;
+        }
+
         busy = ssid;
         pending = ssid;
         error = "";
@@ -179,6 +190,16 @@ Singleton {
     }
 
     Process {
+        id: savedProc
+        command: ["nmcli", "-t", "-f", "NAME", "connection", "show"]
+        running: true
+
+        stdout: StdioCollector {
+            onStreamFinished: root.saved = this.text.split("\n").filter((l) => l !== "")
+        }
+    }
+
+    Process {
         id: active
         command: ["nmcli", "-t", "-f", "IN-USE,SSID", "device", "wifi", "list"]
         running: true
@@ -225,6 +246,7 @@ Singleton {
         onExited: (code) => {
             root.busy = "";
             active.running = true;
+            savedProc.running = true;
             if (code === 0) {
                 root.needsPassword = "";
                 root.scan();

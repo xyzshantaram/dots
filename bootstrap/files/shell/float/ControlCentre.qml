@@ -3,20 +3,22 @@ import "../core"
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import "../services"
 
 // The control centre: what the bar only has room to hint at.
 //
-// A PopupWindow, like the mixer — the bar's headroom is for tooltips and short
-// menus, and this one is tall and scrolls in spirit even if it does not yet.
-// The anchor maths is the mixer's, flipped to the right edge because this opens
-// from the last widget on the bar.
+// A PanelWindow, not a PopupWindow like the mixer. A PopupWindow is a menu
+// surface and never takes the keyboard: forceActiveFocus left activeFocus false
+// and not one key arrived, however the focus was asked for. Every surface in
+// the reference shell that accepts typing — launcher, clipboard, settings — is
+// a PanelWindow with exclusive keyboard, which is what this is now.
 //
 // The notification server is passed in rather than created here: it has to
 // outlive the panel, and there can only be one. It lives on Bar, outside the
 // per-screen Variants, so a second monitor does not try to claim the D-Bus name
 // a second time.
-PopupWindow {
+PanelWindow {
     id: root
 
     required property Item anchorItem
@@ -25,6 +27,18 @@ PopupWindow {
     color: "transparent"
     implicitWidth: 336
     implicitHeight: body.height + 16
+
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+    // Eight off the right edge and eight under the strip, which is where the
+    // anchor arithmetic used to put it. PanelWindow's own anchors, not
+    // WlrLayershell's: the latter takes an opaque value type and cannot be
+    // written as Top | Right.
+    anchors.top: true
+    anchors.right: true
+    margins.top: Theme.barHeight + 8
+    margins.right: 8
+    exclusionMode: ExclusionMode.Ignore
 
     // Scanning wakes the radio, so it only happens while the panel is up and the
     // network list is the one being looked at.
@@ -48,14 +62,6 @@ PopupWindow {
     onBluetoothOpenChanged: {
         if (visible && bluetoothOpen) BT.discover();
     }
-
-    anchor.item: root.anchorItem
-    // Breathing room: eight to the left, which reads as eight off the right
-    // edge of the screen since this hangs off the last widget on the bar, and
-    // eight below the strip.
-    anchor.rect.x: root.anchorItem ? -(root.width - root.anchorItem.width) - 8 : 0
-    anchor.rect.y: root.anchorItem ? root.anchorItem.height + 8 : 0
-    anchor.adjustment: PopupAdjustment.SlideX
 
     Rectangle {
         id: body
@@ -152,16 +158,6 @@ PopupWindow {
                     detailColor: Theme.alert
                     on: Dictation.running
                     activate: () => Dictation.toggle()
-                }
-
-                Chip {
-                    width: root.chipWidth
-                    glyph: "\uf0f3"         // bell
-                    label: "Don't disturb"
-                    on: root.server?.doNotDisturb ?? false
-                    activate: () => {
-                        if (root.server) root.server.doNotDisturb = !root.server.doNotDisturb
-                    }
                 }
             }
 
@@ -282,6 +278,13 @@ PopupWindow {
                         // The passphrase, inline under the row it belongs to.
                         Rectangle {
                             visible: Wifi.needsPassword === network.modelData.ssid
+                            // Ask for the keyboard, then hand the field active
+                            // focus. A bound `focus` does nothing on its own:
+                            // nothing grants active focus in a panel whose
+                            // window never took the keyboard.
+                            onVisibleChanged: {
+                                if (visible) Qt.callLater(() => passphrase.forceActiveFocus());
+                            }
                             width: parent.width
                             height: 32
                             radius: 10
@@ -735,57 +738,20 @@ PopupWindow {
             Repeater {
                 model: root.server?.trackedNotifications?.values ?? []
 
+                // A Notice is its own file with its own context, so it cannot
+                // see the delegate's modelData; the id carries it across.
                 Item {
-                    id: note
+                    id: noteHolder
 
                     required property var modelData
 
                     width: column.width
-                    height: noteColumn.implicitHeight + 12
+                    height: notice.implicitHeight
 
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: 8
-                        color: noteArea.containsMouse ? Theme.surface : "transparent"
-                    }
-
-                    Column {
-                        id: noteColumn
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 2
-
-                        Text {
-                            width: parent.width
-                            text: `${note.modelData.appName ?? ""} · ${note.modelData.summary ?? ""}`
-                            color: Theme.text
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize
-                            elide: Text.ElideRight
-                        }
-
-                        Text {
-                            visible: (note.modelData.body ?? "") !== ""
-                            width: parent.width
-                            text: note.modelData.body ?? ""
-                            color: Theme.textMuted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSizeSmall
-                            elide: Text.ElideRight
-                        }
-                    }
-
-                    MouseArea {
-                        id: noteArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        // Clicking dismisses: the panel is not a notification
-                        // daemon, and there is nowhere else for a click to go.
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: note.modelData.dismiss()
+                    Notice {
+                        id: notice
+                        width: parent.width
+                        note: noteHolder.modelData
                     }
                 }
             }

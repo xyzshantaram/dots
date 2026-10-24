@@ -48,6 +48,9 @@ PanelWindow {
 
     color: "transparent"
     WlrLayershell.layer: WlrLayer.Top
+    // On-demand here: the panels are their own layer surfaces and ask for the
+    // keyboard themselves, so this window only takes it for a focused text
+    // field in the banner.
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
     // The strip, and only the strip, is space taken from the tiling area. The
@@ -128,8 +131,9 @@ PanelWindow {
     // Notification banners, at the control centre's top edge and stacking down.
     Toasts {
         id: toasts
-        anchor: bar.menuDownItem
         server: notifications
+        // A menu and a banner compete for the same corner; the menu wins.
+        suppressed: shell.floating
     }
 
     // The one tooltip, drawn under the strip for whichever widget asked. Hidden
@@ -192,6 +196,9 @@ PanelWindow {
         anchorItem: bar.menuDownItem
         visible: bar.menuDownItem.menuOpen
         server: notifications
+        // Its own window now, so it has to be told which screen it belongs to;
+        // PanelWindow otherwise picks the primary.
+        screen: shell.screen
     }
 
     Lock { }

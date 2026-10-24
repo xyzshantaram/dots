@@ -54,3 +54,12 @@ type_delay_ms = 3
 # show for the key press. `voxtype info devices` lists the names it accepts;
 # pipewire-alsa (also in 40-packages) is what puts `pipewire` in that list.
 device = "pipewire"
+
+[output.notification]
+# Off, all three. Voxtype notifies on every transcription by default, and the
+# shell already shows the recording in its pill and the preview strip — a
+# notification saying the same thing is a second answer to one question, and
+# one that interrupts. Set on_transcription back to true to get them.
+on_recording_start = false
+on_recording_stop = false
+on_transcription = false

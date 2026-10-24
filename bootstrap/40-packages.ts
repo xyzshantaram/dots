@@ -102,8 +102,12 @@ const STORAGE = ["udisks2", "udiskie"];
  *
  * gammastep is the night light — the Wayland successor to redshift, which is
  * what knows when sunset is at a given latitude rather than at a fixed hour.
+ *
+ * gnome-system-monitor is the per-process view. The bar's split pill says how
+ * loaded the machine is, not by what, and this is where that question gets
+ * answered.
  */
-const APPS = ["firefox", "podman", "ffmpeg", "flatpak", "gammastep"];
+const APPS = ["firefox", "podman", "ffmpeg", "flatpak", "gammastep", "gnome-system-monitor"];
 
 /**
  * Dictation. fastflowlm 1.0.9 is in extra and newer than the AUR's
