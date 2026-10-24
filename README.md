@@ -27,6 +27,41 @@ bootstrap/
   files/            vendored assets
 ```
 
+## Shell
+
+Quickshell, under `bootstrap/files/shell/`. The ladder copies the directory to
+`~/.config/shell`, so a new file installs itself and no step names one.
+
+```
+Shell.qml        the one full-screen layer surface: strip, floats, catcher
+bar/             the strip's widgets, each in its own file
+float/           control centre, mixer, tray menu, bluetooth menu
+components/      chips, entries, the notification card
+core/            Theme, and the shared hover state
+dock/            the dock
+lock/            the lock screen
+notices/         notification banners
+services/        niri, wifi, bluetooth, pipewire, voxtype, OSD
+```
+
+- The window is full-screen and transparent, and `mask` is a union of
+  rectangles. Opening the whole screen so a banner could be clicked kept the
+  mask full-screen for a notification with no timeout, and the shell took every
+  click and key on the machine.
+- The strip reserves `Theme.barHeight` through `exclusiveZone`. Everything else
+  in the window is click-through.
+- A surface that takes typing is a `PanelWindow` with exclusive keyboard. A
+  `PopupWindow` is a menu surface and never receives the keyboard, however the
+  focus is asked for — that is what kept the Wi-Fi passphrase untypable.
+- The shell owns `org.freedesktop.Notifications`. `swaync` must not be running:
+  it takes the name and draws its own cards.
+- One `Notice` component is both the banner and the panel row, so the two cannot
+  drift apart.
+- The dock is its own surface anchored to the bottom edge. The two pixels it
+  reserves are the reveal trigger, so the mask only describes the plate, and the
+  base flares into the screen edge as one `Shape` path rather than a rounded
+  rectangle.
+
 ## Decisions
 
 **Boot**
@@ -78,6 +113,8 @@ bootstrap/
 - `pacman -Q` resolves provides; `pacman -R` does not. Use `pacman -Qo <file>`.
 - sudo *can* prompt inside the chroot: `/dev/tty` resolves to the terminal that started the run.
 - A wrong font name never errors — fontconfig substitutes silently.
+- `WlrLayershell.layer: WlrLayer.Overlay` on a `PopupWindow` segfaults Quickshell. Set it on construction-time bindings only for `PanelWindow`.
+- An icon is found by desktop entry first. A launcher that wraps an app reports its own id, so fall back to `StartupWMClass`: Spotify's window is `spotify`, its entry is `spotify-launcher.desktop`.
 
 ## Assumptions
 
