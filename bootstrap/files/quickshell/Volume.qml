@@ -14,11 +14,12 @@ import "services"
 Pill {
     id: root
 
-    readonly property string tip: Audio.micMuted
-        ? `Output: ${Math.round(Audio.volume * 100)}%\nMicrophone muted`
-        : Audio.muted
-            ? "Output muted"
-            : `Output: ${Math.round(Audio.volume * 100)}%`
+    // Both directions, named: which device is actually playing is the thing you
+    // cannot see from a speaker glyph, and on a laptop with two microphones it
+    // is the same question on the input side.
+    readonly property string tip:
+        `${Audio.sinkName}: ${Math.round(Audio.volume * 100)}%\n` +
+        `${Audio.sourceName}: ${Math.round(Audio.sourceVolume * 100)}%`
 
     // Both glyphs sit in their own Item so the nudge below can move the ink
     // without moving the layout item — anchors are ignored on a layout child,
@@ -40,7 +41,9 @@ Pill {
             horizontalAlignment: Text.AlignHCenter
 
             anchors.centerIn: parent
-            anchors.horizontalCenterOffset: root.glyphNudgeX
+            // The muted glyph is drawn differently inside its advance from the
+            // three speaker glyphs, so it does not want the same nudge.
+            anchors.horizontalCenterOffset: Audio.muted ? 0 : root.glyphNudgeX
         }
     }
 
@@ -70,11 +73,20 @@ Pill {
     /** Per glyph, by eye: see the note in Tray.qml. */
     property int glyphNudgeX: 2
 
+    /** Click opens the mixer; muting lives in there now. */
+    property bool menuOpen: false
+
     MouseArea {
         anchors.fill: parent
         hoverEnabled: true
+        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
         cursorShape: Qt.PointingHandCursor
-        onClicked: Audio.toggleMute()
+        // Left opens the mixer, middle mutes without opening anything — the
+        // gesture you want mid-sentence, when a panel would be in the way.
+        onClicked: (mouse) => {
+            if (mouse.button === Qt.MiddleButton) Audio.toggleMute()
+            else root.menuOpen = !root.menuOpen
+        }
         onEntered: Hover.show(root, mapToItem(null, width / 2, 0).x)
         onExited: Hover.hide(root)
     }

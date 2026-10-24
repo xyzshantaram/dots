@@ -6,6 +6,7 @@ BluetoothPill 1.0 BluetoothPill.qml
 CapsLock 1.0 CapsLock.qml
 Clock 1.0 Clock.qml
 MetricIcons 1.0 MetricIcons.qml
+Mixer 1.0 Mixer.qml
 Pill 1.0 Pill.qml
 Tray 1.0 Tray.qml
 Volume 1.0 Volume.qml

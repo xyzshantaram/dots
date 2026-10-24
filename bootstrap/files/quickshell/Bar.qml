@@ -105,8 +105,17 @@ Scope {
                 // Named, because the bar draws its dropdown.
                 Tray { id: tray }
                 CapsLock {}
-                Volume {}
+                Volume { id: volume }
                 BluetoothPill { id: bt }
+            }
+
+            // The mixer is its own popup window rather than a panel in the
+            // headroom: it grows with the number of applications playing, and a
+            // fixed strip has no room for that.
+            Mixer {
+                id: mixer
+                anchorItem: volume
+                visible: volume.menuOpen
             }
 
             // The one tooltip, drawn under the strip at whichever widget asked

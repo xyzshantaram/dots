@@ -22,6 +22,7 @@ system.
 - `20-media` — Audacity, Kdenlive.
 - `30-office` — OnlyOffice, built from the AUR.
 - `40-typesetting` — Typst, its language service, and fonttools.
+- `50-color-picker` — `wl-color-picker`, from the AUR: pick a colour off the screen.
 
 ## What it installs, and where
 
@@ -36,6 +37,7 @@ system.
 | OnlyOffice | the AUR, built by `aurInstall` | `onlyoffice-bin` |
 | `typst`, `tinymist` | the repositories | `typst`, `tinymist` |
 | `fonttools` | the repositories | `python-fonttools` |
+| `wl-color-picker` | the AUR, built by `aurInstall` | `wl-color-picker` |
 
 `ffmpeg` is deliberately not here. It is installed by the main ladder's
 `40-packages`, because it is useful on its own and not only as something

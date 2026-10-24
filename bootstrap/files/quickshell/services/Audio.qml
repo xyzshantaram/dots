@@ -22,8 +22,20 @@ Singleton {
 
     /** 0…1, as PipeWire reports it. */
     readonly property real volume: sink?.audio?.volume ?? 0
+    readonly property real sourceVolume: source?.audio?.volume ?? 0
     readonly property bool muted: sink?.audio?.muted ?? false
     readonly property bool micMuted: source?.audio?.muted ?? false
+
+    /**
+     * What to call a node, for a tooltip or a list row. Description first: it is
+     * the human one, and nickname and name are the fallbacks PipeWire offers.
+     */
+    function label(node, fallback): string {
+        return node?.description || node?.nickname || node?.name || fallback
+    }
+
+    readonly property string sinkName: label(sink, "output")
+    readonly property string sourceName: label(source, "input")
 
     /** Three glyphs' worth of resolution: off, quiet, loud. */
     readonly property string level: muted ? "off" : volume < 0.34 ? "low" : "high"
@@ -37,31 +49,49 @@ Singleton {
         return out
     }
 
-    readonly property var sinks: nodesWhere((n) => n.isSink && !n.isStream)
-    readonly property var sources: nodesWhere((n) => !n.isSink && !n.isStream)
+    /**
+     * The class strings, not isSink, decide what a node is.
+     *
+     * Checking "isSink and not a stream" also matched the video nodes the
+     * screenshot portal leaves behind, one per capture, named after the output
+     * they came from — eDP-1 several times over, with no description between
+     * them. media.class is the one field that says what a node actually is.
+     */
+    function nodeClass(node): string {
+        return node?.properties?.["media.class"] ?? ""
+    }
+
+    readonly property var sinks: nodesWhere((n) =>
+        nodeClass(n).startsWith("Audio/Sink"))
+
+    readonly property var sources: nodesWhere((n) =>
+        nodeClass(n).startsWith("Audio/Source"))
 
     /**
      * Applications producing audio.
      *
-     * Filtered by media.class rather than by isSink, because the meaning of
-     * isSink for a stream varies by stream; the class string does not.
+     * For a stream the class is what distinguishes an application's output from
+     * a capture; isSink means different things for different streams.
      */
     readonly property var streams: nodesWhere((n) =>
-        n.isStream && (n.properties?.["media.class"] ?? "") === "Stream/Output/Audio")
+        nodeClass(n) === "Stream/Output/Audio")
 
     /**
      * Nodes have to be subscribed to before their properties mean anything.
      *
-     * Until one is tracked, `defaultAudioSink` exists as an object with a
-     * volume of zero and a mute of false — which reads as a perfectly silent
-     * machine rather than as a node nobody has asked about. Streams are tracked
-     * for their properties too, which is where the application name lives.
+     * Until one is tracked, it exists as an object with a volume of zero, a
+     * mute of false and — the part that shows — no description or name at all.
+     * That is what put blank rows in the mixer: only the defaults and the
+     * streams were tracked, so every other device listed itself as nothing.
+     *
+     * Everything with an audio interface is tracked, which is every node the
+     * mixer can show.
      */
     PwObjectTracker {
         objects: {
-            const tracked = [Pipewire.defaultAudioSink, Pipewire.defaultAudioSource]
+            const tracked = []
             for (const node of Pipewire.nodes.values) {
-                if (node && node.audio && node.isStream) tracked.push(node)
+                if (node && node.audio) tracked.push(node)
             }
             return tracked
         }
