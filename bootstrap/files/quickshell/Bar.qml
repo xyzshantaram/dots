@@ -106,7 +106,7 @@ Scope {
                 Tray { id: tray }
                 CapsLock {}
                 Volume { id: volume }
-                BluetoothPill { id: bt }
+                Connectivity { id: bt }
             }
 
             // The mixer is its own popup window rather than a panel in the

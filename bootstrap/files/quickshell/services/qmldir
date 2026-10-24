@@ -4,3 +4,4 @@ singleton Audio 1.0 Audio.qml
 singleton BT 1.0 BT.qml
 singleton Keyboard 1.0 Keyboard.qml
 singleton Metrics 1.0 Metrics.qml
+singleton Net 1.0 Net.qml

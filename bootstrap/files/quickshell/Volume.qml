@@ -31,9 +31,9 @@ Pill {
         Text {
             id: speaker
 
-            text: Audio.level === "off" ? "\uf026"      // nf-fa-volume_off
-                : Audio.level === "low" ? "\uf027"      // nf-fa-volume_down
-                : "\uf028"                              // nf-fa-volume_up
+            text: Audio.level === "off" ? "\uDB81\uDF5F"   // nf-md-volume_mute, U+F075F
+                : Audio.level === "low" ? "\uf027"         // nf-fa-volume_down
+                : "\uf028"                                 // nf-fa-volume_up
             color: Audio.muted ? Theme.alert : Theme.text
             font.family: Theme.iconFont
             font.pixelSize: Theme.glyphSize

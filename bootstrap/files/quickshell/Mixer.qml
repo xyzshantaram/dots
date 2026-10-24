@@ -63,8 +63,8 @@ PopupWindow {
                 // crossed out when muted, and both at the bar's glyph size — at
                 // text size they read as specks beside the track.
                 text: levelRow.isInput
-                    ? (levelRow.isMuted ? "\uDB80\uDF6D" : "\uDB80\uDF6C")   // mic-off / mic
-                    : (levelRow.isMuted ? "\uf6a9" : "\uf028")               // volume-xmark / volume-high
+                    ? (levelRow.isMuted ? "\uDB80\uDF6D" : "\uDB80\uDF6C")     // mic-off / mic
+                    : (levelRow.isMuted ? "\uDB81\uDF5F" : "\uf028")           // volume-mute / volume-high
                 color: levelRow.isMuted ? Theme.alert : Theme.text
                 font.family: Theme.iconFont
                 font.pixelSize: Theme.glyphSize
