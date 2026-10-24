@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Widgets
+import "services"
 
 // The bar: one layer-shell surface per screen, a left cluster, a right cluster
 // and nothing in between.
@@ -58,6 +59,14 @@ Scope {
                     width: trayMenu.visible ? trayMenu.width : 0
                     height: trayMenu.visible ? trayMenu.height : 0
                 }
+
+                Region {
+                    item: btPanel.visible ? btPanel : null
+                    x: btPanel.x
+                    y: btPanel.y
+                    width: btPanel.visible ? btPanel.width : 0
+                    height: btPanel.visible ? btPanel.height : 0
+                }
             }
 
             RowLayout {
@@ -87,11 +96,17 @@ Scope {
                 // metric icons, the tray, then volume, bluetooth, network and
                 // battery.
                 VoxtypePill {}
-                Metrics {}
+                // MetricIcons, not Metrics: the service is called Metrics, and
+                // importing services/ into this file would put both names in
+                // scope at once. A widget named after its service only works
+                // until the file needs the service.
+                MetricIcons {}
 
                 // Named, because the bar draws its dropdown.
                 Tray { id: tray }
                 CapsLock {}
+                Volume {}
+                BluetoothPill { id: bt }
             }
 
             // The one tooltip, drawn under the strip at whichever widget asked
@@ -204,6 +219,131 @@ Scope {
                 // No hover handler here any more. The menu opens on a click of
                 // the puzzle piece, so there is nothing to keep alive while the
                 // pointer crosses the gap to it.
+            }
+
+            // The bluetooth menu: the radio on or off, then the devices we can
+            // connect to. The same shape as the tray's, and the same note
+            // applies — this is the second of these, and the third (network)
+            // is where the chrome stops being duplicated.
+            Item {
+                id: btPanel
+
+                visible: bt.menuOpen && BT.available
+                z: 12
+
+                width: 240
+                height: btColumn.implicitHeight + 12
+                y: Theme.barHeight + 4
+                x: Math.max(4, Math.min(window.width - width - 4, bt.dropdownX - width / 2))
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radiusSmall
+                    color: Theme.surfaceRaised
+                    border.width: 1
+                    border.color: Theme.border
+                }
+
+                Column {
+                    id: btColumn
+                    anchors.centerIn: parent
+                    spacing: 2
+
+                    // The radio itself: one row, one toggle.
+                    Item {
+                        width: 220
+                        height: 28
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: BT.enabled ? "Bluetooth on" : "Bluetooth off"
+                            color: BT.enabled ? Theme.text : Theme.textMuted
+                            font.family: Theme.fontFamily
+                            font.pixelSize: Theme.fontSize
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: BT.toggleEnabled()
+                        }
+                    }
+
+                    Rectangle {
+                        width: 220
+                        height: 1
+                        color: Theme.border
+                    }
+
+                    Repeater {
+                        model: BT.known
+
+                        Item {
+                            id: deviceRow
+
+                            required property var modelData
+
+                            width: 220
+                            height: 28
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 10
+                                anchors.right: state.right
+                                anchors.rightMargin: 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: deviceRow.modelData.name ?? deviceRow.modelData.address
+                                color: deviceRow.modelData.connected ? Theme.text : Theme.textMuted
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSize
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                id: state
+                                anchors.right: parent.right
+                                anchors.rightMargin: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: deviceRow.modelData.connected ? "connected" : ""
+                                color: Theme.alert
+                                font.family: Theme.fontFamily
+                                font.pixelSize: Theme.fontSizeSmall
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: BT.toggleDevice(deviceRow.modelData)
+                            }
+                        }
+                    }
+
+                    Text {
+                        visible: BT.known.length === 0
+                        text: "No paired devices"
+                        color: Theme.textDim
+                        font.family: Theme.fontFamily
+                        font.pixelSize: Theme.fontSizeSmall
+                    }
+                }
+            }
+
+            // Only one menu at a time: opening either closes the other, or they
+            // stack in the same patch of screen.
+            Connections {
+                target: bt
+                function onMenuOpenChanged() {
+                    if (bt.menuOpen) tray.menuOpen = false
+                }
+            }
+
+            Connections {
+                target: tray
+                function onMenuOpenChanged() {
+                    if (tray.menuOpen) bt.menuOpen = false
+                }
             }
         }
     }

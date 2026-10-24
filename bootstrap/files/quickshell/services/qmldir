@@ -1,4 +1,6 @@
 singleton Niri 1.0 Niri.qml
 singleton Voxtype 1.0 Voxtype.qml
-singleton Metrics 1.0 Metrics.qml
+singleton Audio 1.0 Audio.qml
+singleton BT 1.0 BT.qml
 singleton Keyboard 1.0 Keyboard.qml
+singleton Metrics 1.0 Metrics.qml
