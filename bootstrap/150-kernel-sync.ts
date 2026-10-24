@@ -1,16 +1,12 @@
 /**
  * ---
  * script: 150-kernel-sync.ts
- * desc: Writes the two Arch boot entries and keeps the ESP copies of kernel, initramfs and microcode current on every kernel update.
+ * desc: Writes the Arch boot entry and keeps the ESP copies of kernel and initramfs current on every kernel update.
  * needs: 10-mount.ts up, 145-hibernate.ts up, KERNEL in .env
- * up: installs esp-sync and its pacman hook, writes arch.conf (current) and arch-known-good.conf (previous) with resume=, runs the first sync
- * down: removes both entries, the hook, the script, and the ESP copies it made
+ * up: installs esp-sync and its pacman hook, writes arch.conf with resume=, runs the first sync
+ * down: removes the entry, the hook, the script, and the ESP copies it made
  * revisit: 2026-12-21
  * ---
- *
- * Rotation: on each update the old `current` pair becomes `previous`, so
- * "known good" is the kernel that was running before the update. That is the
- * entry to pick when a fresh kernel misbehaves.
  *
  * The hook fires on usr/lib/modules/<version>/vmlinuz at PostTransaction,
  * after 90-mkinitcpio-install.hook has rebuilt the initramfs.
@@ -105,8 +101,7 @@ async function up(): Promise<void> {
   await backupOnce(ARCH_CONF, ".pre-esp-sync");
 
   await writeArch(ARCH_CONF, entry("Arch Linux", "current"));
-  await writeArch(KNOWN_GOOD, entry("Arch Linux (known good)", "previous"));
-  say(`wrote ${ARCH_CONF} and ${KNOWN_GOOD}`);
+  say(`wrote ${ARCH_CONF}`);
   say(`cmdline: ${ARGS.join(" ")}`);
 
   const sync = await inArchSoft("env", `KERNEL=${KERNEL}`, "/usr/local/bin/esp-sync");

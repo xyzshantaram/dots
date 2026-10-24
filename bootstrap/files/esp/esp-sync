@@ -9,10 +9,8 @@
 #   /EFI/arch/current/{vmlinuz,initramfs}-<kernel>
 #   /EFI/arch/previous/{vmlinuz,initramfs}-<kernel>
 #
-# arch.conf boots `current`; arch-known-good.conf boots `previous`, which is
-# the kernel that was running before the last update. That is the pair to fall
-# back to when a new kernel misbehaves. On the first sync `previous` is seeded
-# from `current` so the fallback entry resolves from the start.
+# arch.conf boots `current`. `previous` is the pair from before the last update
+# and nothing boots it: copy it back by hand if a new kernel misbehaves.
 #
 # Run by /usr/share/libalpm/hooks/99-esp-kernel-sync.hook after mkinitcpio has
 # regenerated the initramfs.
@@ -55,13 +53,9 @@ fi
 
 install -d "$CURRENT" "$PREVIOUS"
 
-# previous has to hold a real pair. arch-known-good.conf points at it, and
-# systemd-boot assembles its menu from loader/entries without checking that the
-# files exist - it lists such an entry and only fails when someone picks it, so
-# an empty previous is a broken fallback sitting in the menu, discovered at the
-# worst possible moment. Seed it from current when there is one, otherwise from
-# the pair about to be installed: on a fresh install both are the same kernel,
-# and the first update replaces the seed with a genuinely older one.
+# Seed previous from current when there is one, otherwise from the pair about to
+# be installed: on a fresh install both are the same kernel, and the first update
+# replaces the seed with a genuinely older one.
 if [ ! -f "$PREVIOUS/$VMLINUZ" ] || [ ! -f "$PREVIOUS/$INITRAMFS" ]; then
     seed="$CURRENT"
     [ -f "$CURRENT/$VMLINUZ" ] || seed="$SRC_DIR"

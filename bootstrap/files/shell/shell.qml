@@ -1,11 +1,11 @@
 // The shell.
 //
-//   qs -p ~/.config/shell      run this one
-//   qs -p ~/.config/quickshell run the older one
+//   qs -p ~/.config/shell    run it
+//   qs -p ~/.config/shell    run it again after an edit, replacing the instance
 //
-// Two configs side by side on purpose: this tree is being built next to the
-// working one, and niri still spawns the old one. Nothing here can take the
-// laptop down while that is true.
+// This is now the only config. The tree it was built beside is gone, and
+// 120-quickshell.ts deletes any ~/.config/quickshell it finds — a bare `qs`
+// reads that path, and it would load a bar with no click-catcher.
 //
 // Everything below the root is one window. QML resolves a sibling component by
 // filename with no import, and the singletons in core/, bar/ and float/ are

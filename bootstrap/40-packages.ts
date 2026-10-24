@@ -44,9 +44,15 @@ const KERNEL = ["linux-zen", "amd-ucode", "efibootmgr"];
  * notifications existed by the time the shell registered. Quickshell's own
  * NotificationServer replaced it: one daemon, and the one that the control
  * centre can actually draw.
+ *
+ * polkit-gnome is the authentication agent. Without one, every polkit action
+ * that needs a prompt fails immediately with "Not Authorized" instead of asking
+ * — enrolling a fingerprint, mounting a filesystem, pkexec — because polkitd has
+ * nobody to ask. niri does not implement XDG autostart, so the agent's .desktop
+ * never runs and 110-niri spawns the binary from the session instead.
  */
 const DESKTOP = [
-  "niri", "wezterm", "quickshell", "gtklock",
+  "niri", "wezterm", "quickshell", "gtklock", "polkit-gnome",
   "swaybg", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk",
   "nautilus", "papers", "gedit",
 ];

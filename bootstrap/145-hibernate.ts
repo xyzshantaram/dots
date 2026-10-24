@@ -14,9 +14,6 @@
  *
  * When a swap partition is shared with another installed OS, whoever hibernates
  * owns it: booting the other one starts that swap unit and discards the image.
- * The mitigation lives in dualboot-utils/20-hibernate-mark.ts, which labels the
- * hibernated entry and makes it the one-shot boot default. It is a sign, not a
- * lock — see dualboot-utils/README.md.
  *
  * Arch's default HOOKS are busybox-based, so the `resume` hook is required and
  * must follow `udev`. A systemd-hook initramfs would get resume for free.
@@ -94,6 +91,26 @@ ExecStart=/usr/lib/systemd/systemd-sleep hibernate
 ExecStartPre=/usr/local/bin/hibernate-wakeup-mask
 `,
   );
+  await writeArch(
+    "/etc/systemd/sleep.conf.d/10-hibernate-mode.conf",
+    `# Write the image and power off, rather than handing S4 to the firmware.
+#
+# This machine hangs on the first hibernation attempt: the kernel logs
+# "PM: hibernation: hibernation entry" and then nothing, and the next boot
+# finds no image at all, so it cold boots. Every progress line that would
+# follow — preallocation, "Basic memory bitmaps created", the image write —
+# is missing, which puts the hang at the very start of the snapshot.
+#
+# Platform mode is the one difference between this machine and one where the
+# same kernel works: it asks the firmware to do the ACPI S4 handoff, and that
+# is the path AMD laptops wedge on. Shutdown mode takes the same snapshot and
+# then powers off cleanly; the initramfs loads the image on the next boot, so
+# the firmware is never involved. The cost is a slower power-off, which for a
+# machine that currently does not hibernate at all is not a cost.
+[Sleep]
+HibernateMode=shutdown
+`,
+  );
   say("installed sleep drop-ins");
 
   await writeArch(
@@ -138,6 +155,7 @@ async function down(): Promise<void> {
     "/etc/hibernate-wakeup-mask.list",
     "/etc/systemd/system/systemd-suspend.service.d/10-suspend-is-hibernate.conf",
     "/etc/systemd/system/systemd-hibernate.service.d/10-wakeup-mask.conf",
+    "/etc/systemd/sleep.conf.d/10-hibernate-mode.conf",
     "/etc/systemd/logind.conf.d/10-hibernate.conf",
     "/etc/tmpfiles.d/hibernation-image-size.conf",
   ]) {

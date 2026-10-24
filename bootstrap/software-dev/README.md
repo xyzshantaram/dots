@@ -24,6 +24,13 @@ system.
   delta as the pager with its colours, and the global ignore file; plus the
   `git-delta` and `bat` packages, and identity and SSH commit signing from
   `.env`.
+- `30-brave-search` — `bx`, the Brave Search CLI, as a pnpm global. The API key
+  is yours to set; the step says how.
+- `40-forges` — `gh` and `glab`, the GitHub and GitLab CLIs, from the
+  repositories. Logging in is left to you, because a token is not something a
+  repository should hold.
+- `50-cloudflare` — `cf`, the Cloudflare CLI, as a pnpm global. Still a 1.0
+  beta; it installs both `cf` and `cloudflare`.
 
 ## What it installs, and where
 
@@ -38,6 +45,9 @@ system.
 | `git-delta`, `bat` | the repositories | `/usr` |
 | git aliases, delta pager | `files/git/config` + `.env` | `~/.config/git/config` |
 | global gitignore | `files/git/ignore` | `~/.config/git/ignore` |
+| `github-cli`, `glab` | the repositories | `/usr/bin/gh`, `/usr/bin/glab` |
+| `bx` | `pnpm add -g` | `~/.local/share/pnpm` |
+| `cf`, `cloudflare` | `pnpm add -g` | `~/.local/share/pnpm` |
 
 Node's version is fnm's, not the repositories', so it can be switched per project.
 `pnpm` is installed with the npm that comes *with* that Node, so the two stay
@@ -91,6 +101,23 @@ much worse message.
 
 `core.excludesFile` is deliberately not set: git's default excludes path is
 `$XDG_CONFIG_HOME/git/ignore`, which is exactly where the ignore file goes.
+
+## Credentials
+
+Nothing here logs in for you, and that is deliberate rather than unfinished:
+`gh`, `glab`, `bx` and `cf` all keep their tokens in the account's home, and a
+token written into a repository is a leaked token even when the file is
+gitignored.
+
+| tool | command | keeps it in |
+| --- | --- | --- |
+| `gh` | `gh auth login` | `~/.config/gh/hosts.yml` |
+| `glab` | `glab auth login` | `~/.config/glab-cli/config.yml` |
+| `bx` | `bx config set-key` | `~/.config/brave-search/config.json` |
+| `cf` | `cf auth login` | `~/.config/cloudflare` |
+
+`down` removes packages and leaves those files, because a credential is the one
+thing in this ladder that cannot be re-derived from the repository.
 
 ## Undo
 

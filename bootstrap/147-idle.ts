@@ -28,11 +28,18 @@ import {
 
 const NIRI = `/home/${ARCH_USER}/.config/niri/config.kdl`;
 
-/** One line, so undo can remove exactly what it added. */
+/** One line, so undo can remove exactly what it added.
+ *
+ * The command and its argument are a single quoted word. swayidle parses the
+ * argument list as `timeout <seconds> <command>`, so `"idle-hibernate" "battery"`
+ * made it treat `battery` as the next keyword: it exited with "Unsupported
+ * command 'battery'" and 255 before the first timer, which is why idle
+ * hibernation never happened.
+ */
 const SPAWN =
   'spawn-at-startup "swayidle" "-w" ' +
-  '"timeout" "600" "/usr/local/bin/idle-hibernate" "battery" ' +
-  '"timeout" "1200" "/usr/local/bin/idle-hibernate" "ac"';
+  '"timeout" "600" "/usr/local/bin/idle-hibernate battery" ' +
+  '"timeout" "1200" "/usr/local/bin/idle-hibernate ac"';
 
 async function up(): Promise<void> {
   await needMount();

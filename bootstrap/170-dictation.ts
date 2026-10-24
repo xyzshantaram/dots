@@ -35,7 +35,7 @@
 import process from "node:process";
 import { $ } from "bun";
 import {
-  ARCH_UID, ARCH_USER, at, aurInstall, inArchSoft, main, needMount,
+  ARCH_UID, ARCH_USER, at, aurInstall, existsInArch, inArchSoft, main, needMount,
   removeArch, say, writeArch, writeUserFile,
 } from "./lib.ts";
 
@@ -90,13 +90,28 @@ async function up(): Promise<void> {
   await writeUserFile(desktop, text.replaceAll("/home/sid", HOME));
   say("retargeted the desktop entry at the Arch account");
 
-  // default.target wants dictation.target. A symlink is what `systemctl --user
-  // enable` would create; a chroot has no user session to run it in.
-  const wants = `${HOME}/.config/systemd/user/default.target.wants`;
+  // graphical-session.target wants dictation.target, not default.target. niri
+  // --session activates that target only after exporting WAYLAND_DISPLAY into
+  // the systemd user manager, so the units started with it inherit the socket.
+  // Starting at login instead handed voxtype an environment from before niri
+  // existed: the wtype wrapper's strip could not open a Wayland connection, and
+  // voxtype fell through its driver order with nothing previewed or typed.
+  // A symlink is what `systemctl --user enable` would create; a chroot has no
+  // user session to run it in.
+  const wants = `${HOME}/.config/systemd/user/graphical-session.target.wants`;
   await $`mkdir -p ${at(wants)}`;
   await $`ln -sf ../dictation.target ${at(wants)}/dictation.target`;
   await $`chown -h ${ARCH_UID}:${ARCH_UID} ${at(wants)} ${at(wants)}/dictation.target`;
-  say("enabled dictation.target for the user session");
+  say("enabled dictation.target for the graphical session");
+
+  // The login-time enablement from before that fix. Re-running this step is how
+  // an existing machine converts, so the removal stays here rather than in a
+  // migration that nothing tracks; a fresh install finds nothing to remove.
+  const stale = `${HOME}/.config/systemd/user/default.target.wants/dictation.target`;
+  if (await existsInArch(stale)) {
+    await removeArch(stale);
+    say(`removed the login-time enablement ${stale}`);
+  }
 
   // NPU needs a high memlock limit. flm validate reports it.
   await writeArch(
@@ -135,6 +150,8 @@ async function up(): Promise<void> {
 async function down(): Promise<void> {
   await needMount();
 
+  await removeArch(`${HOME}/.config/systemd/user/graphical-session.target.wants/dictation.target`);
+  // The pre-fix enablement; a machine installed by the old step still has it.
   await removeArch(`${HOME}/.config/systemd/user/default.target.wants/dictation.target`);
   for (const [, dest] of USER_FILES) await removeArch(dest);
   await removeArch(`${HOME}/.local/share/dictation`);

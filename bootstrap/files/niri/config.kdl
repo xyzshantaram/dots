@@ -7,6 +7,14 @@
 //
 // Mod is Super. keyd maps CapsLock to Meta, so either key works.
 
+// Qt applications take their colours from qt6ct, which 136-qt-theme.ts points
+// at the Breeze-libadwaita dark scheme. Without the platform theme the plugin is
+// never loaded and every Qt app falls back to a light Fusion palette, whatever
+// qt6ct is configured with.
+environment {
+    QT_QPA_PLATFORMTHEME "qt6ct"
+}
+
 input {
     keyboard {
         xkb {
@@ -94,11 +102,16 @@ spawn-at-startup "/usr/local/bin/night-light"
 // them with it. They are stated here instead, where the shell's spawn already
 // is, so that installing this config installs all of it and a later step
 // cannot silently drop one.
+
+// The polkit authentication agent. Without one, every action that needs a
+// prompt fails with "Not Authorized" instead of asking: enrolling a fingerprint,
+// mounting a disk, pkexec. niri does not implement XDG autostart, so the
+// package's .desktop file would never run and the binary is spawned directly.
+spawn-at-startup "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1"
+
 spawn-at-startup "/usr/local/bin/wallpaper-random"
 spawn-at-startup "udiskie"
-spawn-at-startup "swayidle" "-w" \
-    "timeout" "600" "/usr/local/bin/idle-hibernate" "battery" \
-    "timeout" "1200" "/usr/local/bin/idle-hibernate" "ac"
+spawn-at-startup "swayidle" "-w" "timeout" "600" "/usr/local/bin/idle-hibernate battery" "timeout" "1200" "/usr/local/bin/idle-hibernate ac"
 
 hotkey-overlay {
     // Mod+Shift+/ lists these.
@@ -216,12 +229,12 @@ binds {
     // Touchpad gestures (from the niri-gestures build; see 105-niri-gestures.ts).
     // Three fingers open and close the overview; four fingers move around niri.
     // Add natural-scroll=true to the four-finger pair to flip the travel.
-    TouchpadSwipe fingers=3 direction="up"    { open-overview; }
-    TouchpadSwipe fingers=3 direction="down"  { close-overview; }
+    TouchpadSwipe fingers=3 direction="up"    { close-overview; }
+    TouchpadSwipe fingers=3 direction="down"  { open-overview; }
     TouchpadSwipe fingers=4 direction="up"    { focus-workspace-up; }
     TouchpadSwipe fingers=4 direction="down"  { focus-workspace-down; }
-    TouchpadSwipe fingers=4 direction="left"  { focus-column-right; }
-    TouchpadSwipe fingers=4 direction="right" { focus-column-left; }
+    TouchpadSwipe fingers=4 direction="left"  { focus-column-left; }
+    TouchpadSwipe fingers=4 direction="right" { focus-column-right; }
 
     // Screenshots
     Print       { screenshot; }

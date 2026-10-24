@@ -14,7 +14,10 @@
  *
  * Known trade, accepted by the user: fingerprint auth in sudo means a
  * background process can provoke a prompt and get approved by an unintended
- * touch (CVE-2024-37408). max-tries=1 timeout=10 narrows the window.
+ * touch (CVE-2024-37408). max-tries=3 timeout=30 is roomier than a single
+ * 10-second attempt: the sensor takes a moment to wake, and a prompt that
+ * gives up mid-reach leaves you typing the password anyway. It also widens
+ * the window that trade is about, which is the deliberate half.
  *
  * pwfeedback shows one asterisk per typed character. That leaks password
  * length to anyone watching the terminal; it is also what makes the prompt
@@ -34,19 +37,40 @@ const SUDO = "/etc/pam.d/sudo";
 const PWFEEDBACK = "/etc/sudoers.d/10-pwfeedback";
 
 const LOCAL_LOGIN_LINE = "auth       sufficient   pam_fprintd.so";
-const SUDO_LINE = "auth       sufficient   pam_fprintd.so max-tries=1 timeout=10";
+const SUDO_LINE = "auth       sufficient   pam_fprintd.so max-tries=3 timeout=30";
 
-/** Inserts a line at the top of a PAM file, keeping the #%PAM-1.0 header first. */
+/** Any existing fprintd auth line, whatever options it carries. */
+const FPR_LINE = /^\s*auth\s+sufficient\s+pam_fprintd\.so\b/;
+
+/** Puts the fprintd line at the top of a PAM file, keeping the #%PAM-1.0 header first.
+ *
+ * Rewrites an existing fprintd line instead of adding another. The options on
+ * that line are the thing being tuned, and matching only the exact new line
+ * meant a changed max-tries stacked a second `sufficient pam_fprintd` above
+ * the old one, where the first would answer the prompt and the second never
+ * run.
+ */
 async function prepend(rel: string, line: string): Promise<void> {
   const current = await readArch(rel);
   if (current === null) {
     say(`${rel} does not exist in the target; skipping`);
     return;
   }
-  if (current.split("\n").some((l) => l.trim() === line.trim())) {
-    say(`${rel} already has the fprintd line`);
+
+  const lines = current.split("\n");
+  const existing = lines.findIndex((l) => FPR_LINE.test(l));
+  if (existing !== -1) {
+    if (lines[existing].trim() === line.trim()) {
+      say(`${rel} already has the fprintd line`);
+      return;
+    }
+    await backupOnce(rel);
+    lines[existing] = line;
+    await writeArch(rel, lines.join("\n"));
+    say(`updated the fprintd line in ${rel}`);
     return;
   }
+
   await backupOnce(rel);
   const body = current.startsWith("#%PAM-1.0")
     ? current.replace(/(#%PAM-1\.0\n)/, `$1${line}\n`)

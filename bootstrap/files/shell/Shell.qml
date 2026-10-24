@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import "bar"
 import "core"
 import "float"
+import "notices"
 
 // The shell's only window, and the reason the floats work.
 //
@@ -53,6 +54,15 @@ PanelWindow {
     /** True while any float is open: what the mask and the catcher switch on. */
     readonly property bool floating: bar.anyFloatOpen
 
+    /**
+     * Whether the window should be taking input over the whole screen.
+     *
+     * Banners are not floats — they are their own item and they do not close on
+     * an outside click — but they hang below the strip like one, so the mask has
+     * to be opened for them too or they would be drawn and not clickable.
+     */
+    readonly property bool catching: floating || toasts.visible
+
     // One server, and this is the only shell running now that the old tree is
     // gone: it owns org.freedesktop.Notifications, which is why nothing else
     // may be spawned to claim it. Quickshell outlives niri's spawn list here —
@@ -65,7 +75,7 @@ PanelWindow {
         x: 0
         y: 0
         width: shell.width
-        height: shell.floating ? shell.height : Theme.barHeight
+        height: shell.catching ? shell.height : Theme.barHeight
     }
 
     Bar {
@@ -82,6 +92,13 @@ PanelWindow {
         visible: shell.floating
         z: 5
         onClicked: bar.closeFloats()
+    }
+
+    // Notification banners, at the control centre's top edge and stacking down.
+    Toasts {
+        id: toasts
+        anchor: bar.menuDownItem
+        server: notifications
     }
 
     // The one tooltip, drawn under the strip for whichever widget asked. Hidden
