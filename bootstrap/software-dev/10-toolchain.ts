@@ -162,7 +162,7 @@ if test -d $HOME/.cargo/bin
     fish_add_path --move --prepend $HOME/.cargo/bin
 end
 
-# Where uv puts the shims for `uv tool install`.
+# Where uv puts the shims for its tool installs.
 if test -d $HOME/.local/bin
     fish_add_path --move --prepend $HOME/.local/bin
 end

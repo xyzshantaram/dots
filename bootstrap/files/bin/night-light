@@ -1,0 +1,58 @@
+#!/bin/sh
+# Night light, positioned from wherever this machine actually is.
+#
+# gammastep wants a latitude and longitude and will not guess; this asks the
+# network once per session start and hands it one. The alternative everybody
+# uses is a fixed pair of numbers in a config file, which is wrong the moment
+# the laptop is carried somewhere else and wrong by hours at the edge of a
+# timezone, which is exactly where India is.
+#
+# Two things this deliberately does not do. It does not retry: a machine that
+# boots offline gets the fallback immediately, because gammastep being five
+# seconds late is fine and the shell waiting on a network that is not up is
+# not. And it does not chain providers: one request, and if it does not come
+# back, one known place.
+#
+# The fallback is Bangalore. It is a real place rather than a guess of 0,0 —
+# a wrong-but-plausible sunset is a nuisance, while 0,0 is the Gulf of Guinea
+# and gives sunrise in the middle of the afternoon.
+
+set -eu
+
+FALLBACK="12.9716:77.5946"
+
+# Colour temperature, in Kelvin, and lower is warmer — the opposite of the
+# numbers' direction, which is the thing to remember when editing these.
+# gammastep's defaults are 6500 day and 4500 night. 5800 in daylight is a
+# gentle warm rather than an obvious tint, and 4000 at night is warmer than the
+# default without going amber; because the two are close, the transition is
+# correspondingly gentle, which is the point of picking them this way.
+DAY=5800
+NIGHT=4000
+
+location=""
+
+if command -v curl >/dev/null 2>&1; then
+    # /loc is the entire response: "12.9716,77.5946". The timeout matters more
+    # than the result, since this runs while the session is still coming up.
+    raw=$(curl -fsS --max-time 5 https://ipinfo.io/loc 2>/dev/null || true)
+    candidate=$(printf '%s' "$raw" | tr -d '[:space:]' | tr ',' ':')
+
+    # Anything but digits, dots, colons and a minus sign is a captive portal or
+    # an error page, not a position. Both halves must be present.
+    case "$candidate" in
+        '' | *[!0-9.:-]*) ;;
+        *:*) location="$candidate" ;;
+    esac
+fi
+
+if [ -z "$location" ]; then
+    location="$FALLBACK"
+    echo "night-light: not located; using Bangalore ($location)" >&2
+else
+    echo "night-light: located at $location" >&2
+fi
+
+# exec, so the process that ends up under supervision is gammastep itself and
+# not a shell holding it.
+exec gammastep -l "$location" -t "$DAY:$NIGHT"

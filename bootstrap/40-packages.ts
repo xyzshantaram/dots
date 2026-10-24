@@ -89,8 +89,15 @@ const STORAGE = ["udisks2", "udiskie"];
  * General applications. ffmpeg sits here rather than with the artistic ladder's
  * audio and video tools, because it is useful on its own whether or not any of
  * those are installed.
+ *
+ * flatpak is the package manager, not flatpak-apps: the applications it carries
+ * are installed by the ladders that want them (see creative/60-spotify.ts), so
+ * that removing this step does not silently remove somebody's music.
+ *
+ * gammastep is the night light — the Wayland successor to redshift, which is
+ * what knows when sunset is at a given latitude rather than at a fixed hour.
  */
-const APPS = ["firefox", "podman", "ffmpeg"];
+const APPS = ["firefox", "podman", "ffmpeg", "flatpak", "gammastep"];
 
 /**
  * Dictation. fastflowlm 1.0.9 is in extra and newer than the AUR's

@@ -74,9 +74,36 @@ window-rule {
 // permanently empty while swaync drew its own popups over the top.
 spawn-at-startup "qs" "-p" "/home/shan/.config/shell"
 
+// Night light. A helper rather than gammastep directly: gammastep takes a fixed
+// latitude and longitude and this machine moves. See 158-night-light.ts.
+spawn-at-startup "/usr/local/bin/night-light"
+
+// Session programs that belong to the session rather than to the machine.
+//
+// These three used to be added by their own steps — 112-wallpaper, 114-udisks,
+// 147-idle — which meant 110-niri, running later, rewrote this file and took
+// them with it. They are stated here instead, where the shell's spawn already
+// is, so that installing this config installs all of it and a later step
+// cannot silently drop one.
+spawn-at-startup "/usr/local/bin/wallpaper-random"
+spawn-at-startup "udiskie"
+spawn-at-startup "swayidle" "-w" \
+    "timeout" "600" "/usr/local/bin/idle-hibernate" "battery" \
+    "timeout" "1200" "/usr/local/bin/idle-hibernate" "ac"
+
 hotkey-overlay {
     // Mod+Shift+/ lists these.
     skip-at-startup
+}
+
+// Lid close hibernates rather than sleeping. Hibernation is the only suspend
+// this machine does (see 145-hibernate.ts), so this is that same decision
+// applied to the lid: a closed laptop is one being carried, and a machine in a
+// bag should not be awake.
+switch-events {
+    lid-close {
+        spawn "systemctl" "hibernate";
+    }
 }
 
 // Do not let a fullscreen app's idle inhibit stop swayidle's hibernate.
