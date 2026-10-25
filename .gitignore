@@ -12,3 +12,4 @@
 *.sensible-bootstrap-save
 
 node_modules/
+scratch/
