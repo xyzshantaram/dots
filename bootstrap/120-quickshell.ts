@@ -3,7 +3,7 @@
  * script: 120-quickshell.ts
  * desc: Installs the shell tree — the bar, the floats, the notification banners and the services under them — so `qs` draws it on every output.
  * needs: 50-user.ts up, 40-packages.ts up (quickshell), 110-niri.ts up (which spawns `qs -p` at startup)
- * up: writes every file under files/shell into /home/ARCH_USER/.config/shell, removes the old ~/.config/quickshell, and restarts the running shell against the new tree when the target is this system
+ * up: writes every file under files/shell into /home/ARCH_USER/.config/shell, removes the old ~/.config/quickshell, and starts or restarts the shell through niri when the target is this system
  * down: removes the directory
  * revisit: 2026-12-21
  * ---
@@ -29,11 +29,13 @@
  * config where a bare `qs` will find it is a trap, so this removes it instead of
  * tolerating it.
  *
- * `up` also restarts a running shell. Writing the files is not enough:
+ * `up` also starts or restarts a running shell. Writing the files is not enough:
  * Quickshell does watch this directory, but that reload is soft and reuses the
  * windows already on screen, so a change to how many windows exist never shows
- * up. Starting `qs` again replaces the instance and recreates them. Only on the
- * live system: a chroot has no session to restart.
+ * up. Starting `qs` again replaces the instance and recreates them, through
+ * niri so the new process keeps the session scope the fingerprint prompt needs.
+ * Starting one when none is running is the same path, which is also how a shell
+ * that was killed comes back. Only on the live system: a chroot has no session.
  */
 import { $ } from "bun";
 import process from "node:process";
@@ -68,44 +70,78 @@ async function walk(dir: string, base = dir): Promise<string[]> {
  * because this step runs as root under sudo, which does not carry
  * WAYLAND_DISPLAY or XDG_RUNTIME_DIR.
  *
+ * The restart goes through niri's spawn action rather than starting `qs`
+ * directly. A process started from this sudo session lands in the terminal's
+ * logind session, which sits in "closing" once runuser has returned; polkit
+ * then treats it as inactive and pam_fprintd is refused
+ * net.reactivated.fprint.device.verify, so fingerprint unlock silently stops
+ * working. niri's children run in niri.service, the same place the shell it
+ * replaced came from.
+ *
  * Returns false when there was nothing to restart, the start failed, or the old
  * process is still the only one — the caller then prints the manual command.
  */
 async function restartShell(): Promise<boolean> {
   if (!LIVE) return false;
 
-  const before = await $`pgrep -u ${ARCH_USER} -x qs`.nothrow().quiet();
-  const oldPids = before.stdout.toString().trim().split("\n").filter((p) => p !== "");
-  if (before.exitCode !== 0 || oldPids.length === 0) return false;
+  const niri = await $`pgrep -u ${ARCH_USER} -x niri`.nothrow().quiet();
+  const niriPid = niri.stdout.toString().trim().split("\n").filter((p) => p !== "")[0];
+  if (!niriPid) {
+    say("niri is not running; the shell will start at the next login");
+    return false;
+  }
 
+  const running = await $`pgrep -u ${ARCH_USER} -x qs`.nothrow().quiet();
+  const oldPids = running.stdout.toString().trim().split("\n").filter((p) => p !== "");
+
+  // niri owns the session, so its environ has the runtime dir and the bus.
   // /proc/<pid>/environ is NUL-separated, and Bun's shell does not do `<`
   // redirection, so cat it and split on the separator.
-  const environ = await $`cat /proc/${oldPids[0]}/environ`.nothrow().quiet();
-  const keep = ["WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "XDG_CURRENT_DESKTOP"];
+  const environ = await $`cat /proc/${niriPid}/environ`.nothrow().quiet();
+  const keep = ["WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "XDG_CURRENT_DESKTOP", "NIRI_SOCKET"];
   const env: string[] = [];
   for (const line of environ.stdout.toString().split("\0")) {
     const eq = line.indexOf("=");
     if (eq > 0 && keep.includes(line.slice(0, eq))) env.push(line);
   }
 
-  const started = await $`runuser -u ${ARCH_USER} -- env HOME=/home/${ARCH_USER} PATH=/usr/local/bin:/usr/bin ${env} qs -d -p ${DEST}`
+  // niri does not export NIRI_SOCKET to its own children, so `niri msg` cannot
+  // find the socket on its own. The socket is named after the niri pid in the
+  // runtime directory; one session has one, so the first match is the one.
+  const runtime = env.find((e) => e.startsWith("XDG_RUNTIME_DIR="))?.slice("XDG_RUNTIME_DIR=".length);
+  let socket = env.find((e) => e.startsWith("NIRI_SOCKET="))?.slice("NIRI_SOCKET=".length);
+  if (!socket && runtime) {
+    const found = await $`ls ${runtime}/niri.wayland-*.sock`.nothrow().quiet();
+    socket = found.stdout.toString().trim().split("\n").filter((p) => p !== "")[0];
+  }
+  if (!socket) {
+    say("no niri socket found; the shell will start at the next login");
+    return false;
+  }
+  const niriEnv = env.filter((e) => !e.startsWith("NIRI_SOCKET="));
+  niriEnv.push(`NIRI_SOCKET=${socket}`);
+
+  const started = await $`runuser -u ${ARCH_USER} -- env HOME=/home/${ARCH_USER} PATH=/usr/local/bin:/usr/bin ${niriEnv} niri msg action spawn -- qs -p ${DEST}`
     .nothrow().quiet();
   if (started.exitCode !== 0) {
-    say("could not restart the shell; it will pick this up at the next login");
+    say("could not start the shell through niri; it will start at the next login");
     process.stderr.write(started.stderr.toString());
     return false;
   }
 
   // Detached, so give it a moment to fail if it is going to, and require a
-  // process that is not the old one: a failed start leaves the old shell up.
+  // process that is not one of the old ones: a failed start leaves the old
+  // shell, if any, still up.
   await $`sleep 1`.quiet();
   const after = await $`pgrep -u ${ARCH_USER} -x qs`.nothrow().quiet();
-  const newPids = after.stdout.toString().trim().split("\n").filter((p) => p !== "");
-  if (!newPids.some((p) => !oldPids.includes(p))) {
-    say("the shell did not come back as a new instance");
+  const nowPids = after.stdout.toString().trim().split("\n").filter((p) => p !== "");
+  if (!nowPids.some((p) => !oldPids.includes(p))) {
+    say("the shell did not come up as a new instance");
     return false;
   }
-  say("restarted the shell against the new tree");
+  say(oldPids.length === 0
+    ? "started the shell"
+    : "restarted the shell against the new tree");
   return true;
 }
 
