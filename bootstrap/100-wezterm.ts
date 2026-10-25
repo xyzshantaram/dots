@@ -8,15 +8,14 @@
  * revisit: 2026-12-21
  * ---
  *
- * The config's background comes out of ~/wallpapers, which 112-wallpaper.ts
- * populates and swaybg picks from at random. WezTerm takes one per day: the day
- * of the year indexes the sorted directory, so the image changes every 24 hours
- * with no daemon and no state, and an open window keeps the one it started
- * with.
+ * The config's background is the desktop's. wallpaper-random picks an image at
+ * session start and records it in $XDG_RUNTIME_DIR/current-wallpaper;
+ * WezTerm reads that file when a window is created, so the two cannot show
+ * different images and an open window keeps the one it started with.
  *
- * Nothing here vendors an image. With an empty directory there is no background
- * at all, which is the right failure for a machine whose wallpapers have not
- * been supplied yet.
+ * Nothing here vendors an image. With no state file — outside a niri session,
+ * or on a machine whose wallpapers have not been supplied — there is no
+ * background at all, which is the right failure.
  */
 import process from "node:process";
 import {
@@ -38,7 +37,7 @@ async function up(): Promise<void> {
   // hardcoded copy is how this line came to name a font that does not exist.
   const font = content.match(/wezterm\.font\s+'([^']+)'/)?.[1];
   say(font ? `font: ${font}` : "font: could not read the family from the config");
-  say("background: one per day from ~/wallpapers (112-wallpaper.ts installs the directory)");
+  say("background: whatever swaybg is showing ($XDG_RUNTIME_DIR/current-wallpaper)");
 }
 
 async function down(): Promise<void> {

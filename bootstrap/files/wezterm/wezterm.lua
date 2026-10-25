@@ -1,35 +1,35 @@
 -- WezTerm configuration.
 --
--- The background comes out of ~/wallpapers, the same directory 112-wallpaper.ts
--- populates and swaybg picks from at random. Nothing here is committed: the
--- repo ships the mechanism, the images are yours. See files/wallpapers/README.md.
+-- The background is the desktop's: wallpaper-random picks one at session start
+-- and records it in $XDG_RUNTIME_DIR/current-wallpaper, and this reads that file
+-- when a window is created. No choice of its own, so the terminal and swaybg
+-- always show the same image; an open window keeps the one it started with.
 --
--- One image per day: the day of the year picks an entry from the sorted
--- directory, so the choice changes every 24 hours with no daemon and no state
--- file. WezTerm reads the background when a window is created, so an open
--- window keeps the image it started with and the next one gets today's.
+-- Outside a niri session (no state file) there is no background at all, which is
+-- the right failure rather than a second, unrelated image.
 
 local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
 
--- The wallpapers directory, indexed by the day of the year.
-local function today_wallpaper()
-	local dir = os.getenv('HOME') .. '/wallpapers'
-	local files = {}
-	for _, pattern in ipairs { '*.png', '*.jpg', '*.jpeg', '*.webp' } do
-		for _, path in ipairs(wezterm.glob(dir .. '/' .. pattern) or {}) do
-			table.insert(files, path)
-		end
-	end
-	if #files == 0 then
+-- The image swaybg is showing, or nil.
+local function desktop_wallpaper()
+	local runtime = os.getenv('XDG_RUNTIME_DIR')
+	if not runtime then
 		return nil
 	end
-	table.sort(files)
-	local day = tonumber(os.date('%j')) or 1
-	return files[(day % #files) + 1]
+	local file = io.open(runtime .. '/current-wallpaper', 'r')
+	if not file then
+		return nil
+	end
+	local path = file:read('*l')
+	file:close()
+	if not path or path == '' then
+		return nil
+	end
+	return path
 end
 
-local background_file = today_wallpaper()
+local background_file = desktop_wallpaper()
 
 config.initial_cols = 80
 config.initial_rows = 25

@@ -12,6 +12,13 @@ set -u
 DIR="${WALLPAPER_DIR:-$HOME/wallpapers}"
 log() { printf 'wallpaper-random: %s\n' "$*" >&2; }
 
+# The pick is recorded here before swaybg is exec'd, and WezTerm reads it when
+# it creates a window — that is what keeps the terminal's background the same
+# image as the desktop's. The runtime directory belongs to the session, so the
+# file cannot outlive the wallpaper it names.
+state="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/current-wallpaper"
+rm -f "$state" 2>/dev/null || true
+
 [ -d "$DIR" ] || { log "$DIR does not exist; no wallpaper set"; exit 0; }
 
 # Read into an array so paths with spaces survive. Newlines in filenames would
@@ -36,6 +43,8 @@ fi
 # uniform enough to care about.
 pick="${FILES[RANDOM % ${#FILES[@]}]}"
 log "setting $(basename "$pick") (${#FILES[@]} available)"
+
+printf '%s\n' "$pick" > "$state" 2>/dev/null || log "could not record the pick in $state"
 
 # exec: swaybg becomes this process, so niri's spawn keeps it alive. -m fill
 # scales to cover without distorting aspect ratio.

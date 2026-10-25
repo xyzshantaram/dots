@@ -1,7 +1,7 @@
 /**
  * ---
  * script: 112-wallpaper.ts
- * desc: Installs wallpaper-random and points niri at it, so every session starts with a random wallpaper from the account's wallpapers directory.
+ * desc: Installs wallpaper-random and points niri at it, so every session starts with a random wallpaper from the account's wallpapers directory, recorded for the terminal.
  * needs: 110-niri.ts up (config.kdl), 50-user.ts up, 40-packages.ts up (swaybg)
  * up: copies files/wallpapers/* into the account's wallpapers dir, installs the picker, adds one spawn-at-startup line
  * down: removes the picker and that one line; wallpapers are left alone
@@ -20,6 +20,11 @@
  * swaybg is exec'd from the script, so it stays foreground and niri keeps it
  * alive for the session. If there are no wallpapers the script exits 0 without
  * starting anything, which leaves a plain background rather than a failed unit.
+ *
+ * The picker also writes the chosen path to
+ * $XDG_RUNTIME_DIR/current-wallpaper. 100-wezterm and the lock screen read
+ * that file, so the terminal's background and the lock's blurred image are the
+ * same as the desktop's instead of choosing images of their own.
  */
 import process from "node:process";
 import { $ } from "bun";
@@ -117,7 +122,7 @@ async function up(): Promise<void> {
     process.exit(1);
   }
   say("niri validate: config ok");
-  say("a random wallpaper is chosen at each session start");
+  say("a random wallpaper is chosen at each session start and recorded for WezTerm");
 }
 
 async function down(): Promise<void> {

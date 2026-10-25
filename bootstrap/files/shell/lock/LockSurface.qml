@@ -5,7 +5,8 @@ import Quickshell.Io
 import Quickshell.Wayland
 import "../core"
 
-// One per output. Blurred wallpaper from ~/wallpapers, clock, date, password.
+// One per output. Blurred desktop wallpaper — the image swaybg is showing,
+// read from the same state file WezTerm uses — clock, date, password.
 
 WlSessionLockSurface {
     id: surface
@@ -26,9 +27,13 @@ WlSessionLockSurface {
         onTriggered: surface.now = new Date()
     }
 
+    // The image the desktop is showing, not a new random one. wallpaper-random
+    // records its pick in $XDG_RUNTIME_DIR/current-wallpaper and WezTerm reads
+    // the same file; this surface is per output, so reading one path is also
+    // what keeps two monitors from locking onto different images.
     Process {
-        id: pick
-        command: ["sh", "-c", "find \"$HOME/wallpapers\" -maxdepth 1 -type f \\( -name '*.png' -o -name '*.jpg' \\) | shuf -n 1"]
+        id: desktopWall
+        command: ["sh", "-c", "cat \"${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/current-wallpaper\" 2>/dev/null"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: surface.wall = text.trim()
