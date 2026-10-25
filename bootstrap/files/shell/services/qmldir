@@ -1,4 +1,5 @@
 singleton Niri 1.0 Niri.qml
+singleton Notifications 1.0 Notifications.qml
 singleton Voxtype 1.0 Voxtype.qml
 singleton Audio 1.0 Audio.qml
 singleton BT 1.0 BT.qml

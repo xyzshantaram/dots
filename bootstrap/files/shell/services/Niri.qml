@@ -28,35 +28,56 @@ Singleton {
     property var windows: []
     property var outputs: []
 
-    /** Active means focused; "active" and "focused" are the same window. */
-    readonly property var focusedWindow: windows.find((w) => w.is_focused) ?? null
+    /** The focused workspace, which is what names the focused output. */
     readonly property var focusedWorkspace: workspaces.find((w) => w.is_focused) ?? null
 
     /**
-     * The output the bar's workspace strip belongs to.
+     * The output under the pointer.
      *
-     * A window does not carry its output — the JSON has workspace_id and stops
-     * there — so this reads the workspace table rather than a field that is not
-     * in the payload.
+     * niri's `focus-follows-mouse` focuses the workspace and the output when
+     * the pointer enters them, so the focused workspace's output is the one the
+     * pointer is on. The OSD and the banners key off this.
      */
     readonly property string focusedOutputName: focusedWorkspace?.output ?? ""
 
     /**
-     * The workspaces to draw: those on the focused output, in niri's index
-     * order. On a single-output machine that is all of them, which is also what
-     * makes the same code right once a second monitor appears.
+     * Connector name for a window.
+     *
+     * A window does not carry its output — the JSON has workspace_id and stops
+     * there — so the workspace table is the join. Every per-output widget goes
+     * through this; there is no other place the answer exists.
      */
-    readonly property var barWorkspaces: workspaces
-        .filter((w) => w.output === focusedOutputName)
-        .sort((a, b) => a.idx - b.idx)
+    function outputOf(window): string {
+        if (!window) return "";
+        const ws = root.workspaces.find((w) => w.id === window.workspace_id);
+        return ws?.output ?? "";
+    }
 
-    /**
-     * Raw title and app id. Truncation and colour are the widgets' business: a
-     * service that knows about Theme is a service that has to change whenever
-     * the bar's type scale does.
-     */
-    readonly property string windowTitle: focusedWindow?.title ?? ""
-    readonly property string windowAppId: focusedWindow?.app_id ?? ""
+    /** Windows on one output, in niri's order. */
+    function windowsOn(outputName): var {
+        if (!outputName) return [];
+        const ids = {};
+        for (let i = 0; i < root.workspaces.length; i++) {
+            if (root.workspaces[i].output === outputName) ids[root.workspaces[i].id] = true;
+        }
+        return root.windows.filter((w) => ids[w.workspace_id] === true);
+    }
+
+    function focusedWindowOn(outputName): var {
+        return root.windows.find((w) => w.is_focused && root.outputOf(w) === outputName) ?? null;
+    }
+
+    function windowTitleOn(outputName): string {
+        return root.focusedWindowOn(outputName)?.title ?? "";
+    }
+
+    function windowAppIdOn(outputName): string {
+        return root.focusedWindowOn(outputName)?.app_id ?? "";
+    }
+
+    function outputByName(name): var {
+        return root.outputs.find((o) => o.name === name) ?? null;
+    }
 
     /**
      * Runs `niri msg action ...`, taking the arguments as an array.

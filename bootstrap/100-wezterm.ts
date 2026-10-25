@@ -8,14 +8,15 @@
  * revisit: 2026-12-21
  * ---
  *
- * The config's background image lives in ~/wallpapers, which 112-wallpaper.ts
- * populates and swaybg picks from at random. WezTerm names one image rather
- * than choosing at random, because a terminal background is a deliberate
- * choice and a random one would be noise.
+ * The config's background comes out of ~/wallpapers, which 112-wallpaper.ts
+ * populates and swaybg picks from at random. WezTerm takes one per day: the day
+ * of the year indexes the sorted directory, so the image changes every 24 hours
+ * with no daemon and no state, and an open window keeps the one it started
+ * with.
  *
- * Nothing here vendors an image. If ~/wallpapers/Drangarnir.png is absent,
- * wezterm logs a warning and starts with a plain background, which is the right
- * failure for a machine whose wallpapers have not been supplied yet.
+ * Nothing here vendors an image. With an empty directory there is no background
+ * at all, which is the right failure for a machine whose wallpapers have not
+ * been supplied yet.
  */
 import process from "node:process";
 import {
@@ -37,7 +38,7 @@ async function up(): Promise<void> {
   // hardcoded copy is how this line came to name a font that does not exist.
   const font = content.match(/wezterm\.font\s+'([^']+)'/)?.[1];
   say(font ? `font: ${font}` : "font: could not read the family from the config");
-  say(`background: ~/wallpapers/Drangarnir.png (112-wallpaper.ts installs the directory)`);
+  say("background: one per day from ~/wallpapers (112-wallpaper.ts installs the directory)");
 }
 
 async function down(): Promise<void> {

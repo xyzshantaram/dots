@@ -4,23 +4,41 @@
 -- populates and swaybg picks from at random. Nothing here is committed: the
 -- repo ships the mechanism, the images are yours. See files/wallpapers/README.md.
 --
--- Change the name below to use a different image. If the file is absent wezterm
--- logs a warning and starts with a plain background, so a fresh machine without
--- wallpapers still works.
-
-local background_file = 'Drangarnir.png'
+-- One image per day: the day of the year picks an entry from the sorted
+-- directory, so the choice changes every 24 hours with no daemon and no state
+-- file. WezTerm reads the background when a window is created, so an open
+-- window keeps the image it started with and the next one gets today's.
 
 local wezterm = require 'wezterm'
 local config = wezterm.config_builder()
+
+-- The wallpapers directory, indexed by the day of the year.
+local function today_wallpaper()
+	local dir = os.getenv('HOME') .. '/wallpapers'
+	local files = {}
+	for _, pattern in ipairs { '*.png', '*.jpg', '*.jpeg', '*.webp' } do
+		for _, path in ipairs(wezterm.glob(dir .. '/' .. pattern) or {}) do
+			table.insert(files, path)
+		end
+	end
+	if #files == 0 then
+		return nil
+	end
+	table.sort(files)
+	local day = tonumber(os.date('%j')) or 1
+	return files[(day % #files) + 1]
+end
+
+local background_file = today_wallpaper()
 
 config.initial_cols = 80
 config.initial_rows = 25
 
 config.font_size = 15
--- Nerd Fonts 3.x calls this family "FantasqueSansM Nerd Font Mono". The bare
--- "FantasqueSansMono Nerd Font" does not exist, and asking for it makes
--- fontconfig substitute a default without any error.
-config.font = wezterm.font 'FantasqueSansM Nerd Font Mono'
+-- Lilex Nerd Font Mono is the machine's monospace default (80-fonts.ts) and
+-- comes from ttf-lilex-nerd in extra. The Mono build keeps every glyph, icons
+-- included, on the cell grid.
+config.font = wezterm.font 'Lilex Nerd Font Mono'
 config.color_scheme = 'Dark Pastel'
 
 config.enable_tab_bar = false
@@ -30,23 +48,25 @@ config.keys = {
 	{ key = 'Delete', mods = 'CTRL', action = wezterm.action.SendKey { key = 'd', mods= 'ALT' } }
 }
 
--- $HOME so it does not depend on which account name is in .env.
-config.background = {
-  {
-    source = {
-      File = os.getenv('HOME') .. '/wallpapers/' .. background_file,
-    },
-    height = "Cover",
-    width = "Cover",
-    vertical_align = "Middle",
-    horizontal_align = "Center",
-    repeat_x = "NoRepeat",
-    repeat_y = "NoRepeat",
-    hsb = {
-    	brightness = 0.4,
-    	saturation = 0.9
-    }
-  }
-}
+-- $HOME so it does not depend on which account name is in .env. With no images
+-- there is no background at all, which is the right failure on a machine whose
+-- wallpapers have not been supplied yet.
+if background_file then
+	config.background = {
+		{
+			source = { File = background_file },
+			height = "Cover",
+			width = "Cover",
+			vertical_align = "Middle",
+			horizontal_align = "Center",
+			repeat_x = "NoRepeat",
+			repeat_y = "NoRepeat",
+			hsb = {
+				brightness = 0.15,
+				saturation = 0.9
+			}
+		}
+	}
+end
 
 return config

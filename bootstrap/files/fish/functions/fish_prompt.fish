@@ -53,7 +53,7 @@ end
 function fish_prompt
     set -l last_status $status
     # Icons: '' is the Arch logo, and needs a Nerd Font to render. This ladder
-    # installs "FantasqueSansM Nerd Font Mono" (see 80-fonts.ts).
+    # installs Lilex Nerd Font Mono (see 40-packages.ts and 80-fonts.ts).
     # First line: time, user/host, folder, git, venv
     set_color blue
     echo -n ' '

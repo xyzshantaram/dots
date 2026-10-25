@@ -7,28 +7,34 @@ import "../services"
 // The focused window: its own icon, then a bold grey title cut to
 // Theme.titleChars.
 //
-// "Active" and "focused" are the same window in niri, so this follows
-// Niri.focusedWindow rather than keeping a second notion of which window
-// matters. The whole pill disappears when there is no title to show, which is
-// what an empty workspace should look like.
+// "Active" and "focused" are the same window in niri, so this follows the
+// focused window *on this bar's output* rather than the machine's focused one:
+// with a bar per monitor, the other monitor's window is not this strip's news.
+// The whole pill disappears when there is no title to show, which is what an
+// empty workspace should look like.
 Pill {
     // The pill, not `parent`: children of a Pill are reparented into its inner
     // row, so `parent` here is that row and carries none of these properties.
     id: root
 
-    visible: Niri.windowTitle !== ""
+    /** The output this bar belongs to; see Bar.qml. */
+    required property string outputName
+
+    visible: Niri.windowTitleOn(root.outputName) !== ""
 
     /**
      * niri reports an app id like `org.wezfurlong.wezterm`, which is exactly
      * what a desktop entry is keyed by, so the icon comes from the entry rather
      * than from a private map of ids to glyphs that would rot.
      */
-    readonly property var entry: Niri.windowAppId ? DesktopEntries.byId(Niri.windowAppId) : null
+    readonly property string appId: Niri.windowAppIdOn(root.outputName)
+    readonly property var entry: root.appId ? DesktopEntries.byId(root.appId) : null
     readonly property string iconSource: entry?.icon ? Quickshell.iconPath(entry.icon, true) : ""
 
-    readonly property string shortTitle: Niri.windowTitle.length > Theme.titleChars
-        ? `${Niri.windowTitle.slice(0, Theme.titleChars - 1)}…`
-        : Niri.windowTitle
+    readonly property string title: Niri.windowTitleOn(root.outputName)
+    readonly property string shortTitle: root.title.length > Theme.titleChars
+        ? `${root.title.slice(0, Theme.titleChars - 1)}…`
+        : root.title
 
     Image {
         visible: root.iconSource !== ""

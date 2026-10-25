@@ -3,10 +3,17 @@
  * script: 110-niri.ts
  * desc: Installs the niri config and the session pieces it names: wezterm on Mod+T, vicinae on Mod+D, gtklock on Super+Alt+L, the six XF86 keys, swaync and qs at startup, and the Copilot key bound to voxtype. Installs vicinae itself (the launcher) and the mic-mute helper.
  * needs: 105-niri-gestures.ts up, 50-user.ts up, 40-packages.ts up
- * up: writes /home/ARCH_USER/.config/niri/config.kdl and validates it with niri validate; installs vicinae-bin from the AUR, enables its user unit, and installs /usr/local/bin/mic-mute
- * down: removes the config, the mic-mute helper, the launcher's unit link and the AUR package
+ * up: writes /home/ARCH_USER/.config/niri/ (config.kdl and conf.d/) and validates it with niri validate; installs vicinae-bin from the AUR, enables its user unit, and installs /usr/local/bin/mic-mute
+ * down: removes the config directory, the mic-mute helper, the launcher's unit link and the AUR package
  * revisit: 2026-12-21
  * ---
+ *
+ * The config is split. conf.d/ is the source, one topic per file, and
+ * config.kdl is generated from it by the vendored niri-split (MIT) in
+ * bootstrap/tools/. Both are installed: niri reads only config.kdl, while
+ * conf.d/ is what a person edits. Rebuild with `bun run niri-split` after an
+ * edit. The generated file is committed, so the ladder itself never needs
+ * python.
  *
  * The launcher is vicinae, which is AUR-only, so it comes through aurInstall
  * rather than 40-packages.ts. It is a server plus a client: a systemd *user*
@@ -20,14 +27,29 @@
  * problem is keyd or the tap window, not here.
  */
 import process from "node:process";
+import { readdir } from "node:fs/promises";
+import { join, relative } from "node:path";
 import { $ } from "bun";
 import {
   ARCH_UID, ARCH_USER, LIVE, asUserSoft, at, aurInstall, fail, inArchSoft, main,
   needMount, ok, removeArch, say, writeArch, writeUserFile,
 } from "./lib.ts";
 
-const DEST = `/home/${ARCH_USER}/.config/niri/config.kdl`;
+const SRC = `${import.meta.dir}/files/niri`;
+const DIR = `/home/${ARCH_USER}/.config/niri`;
+const DEST = `${DIR}/config.kdl`;
 const HOME = `/home/${ARCH_USER}`;
+
+/** Every file under a directory, as paths relative to it. */
+async function walk(dir: string, base = dir): Promise<string[]> {
+  const out: string[] = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...(await walk(full, base)));
+    else out.push(relative(base, full));
+  }
+  return out;
+}
 
 /** The launcher. AUR-only; the plain name is not in any official repo. */
 const LAUNCHER = "vicinae-bin";
@@ -79,9 +101,11 @@ async function installLauncher(): Promise<void> {
 async function up(): Promise<void> {
   await needMount();
 
-  const content = await Bun.file(`${import.meta.dir}/files/niri/config.kdl`).text();
-  await writeUserFile(DEST, content);
-  say(`installed ${DEST}`);
+  const files = await walk(SRC);
+  for (const file of files) {
+    await writeUserFile(`${DIR}/${file}`, await Bun.file(join(SRC, file)).text());
+  }
+  say(`installed ${files.length} files into ${DIR}`);
 
   // Local and quick, and before the launcher below: a network failure fetching
   // vicinae must not leave the mic key pointing at a file that was never
@@ -140,13 +164,15 @@ async function down(): Promise<void> {
 
   await removeArch(MIC_MUTE);
   await removeArch(BRIGHTNESS);
-  await removeArch(DEST);
-  say("removed the mic-mute helper and the niri config");
+  await removeArch(DIR);
+  say("removed the mic-mute helper and the niri config directory");
 }
 
 async function verify(): Promise<void> {
   const cfg = `/home/${ARCH_USER}/.config/niri/config.kdl`;
   (await Bun.file(at(cfg)).exists()) ? ok("niri config present") : fail("niri config missing");
+  (await Bun.file(at(`${DIR}/conf.d/01-outputs.kdl`)).exists())
+    ? ok("niri conf.d present") : fail("niri conf.d missing");
   const v = await inArchSoft("niri", "validate", "-c", cfg);
   v.exitCode === 0 ? ok("niri accepts config.kdl") : fail("niri rejects config.kdl");
   (await Bun.file(at("/usr/local/bin/mic-mute")).exists()) ? ok("mic-mute installed") : fail("mic-mute missing");

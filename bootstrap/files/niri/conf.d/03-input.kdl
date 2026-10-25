@@ -1,0 +1,29 @@
+
+input {
+    keyboard {
+        xkb {
+            // Add layout/variant here later, e.g. layout "us"
+        }
+    }
+    touchpad {
+        tap
+        // natural-scroll is off: the touchpad scrolls the traditional way.
+    }
+    // TrackPoint: no pointer acceleration, plus a constant speed bump.
+    // libinput's accel-speed is an abstract -1..1 (0 = unchanged), not a literal
+    // percentage; 0.55 is what this stick settled on, 0.6 was a touch too fast.
+    // With accel-profile "flat" it acts as a constant speed multiplier.
+    //
+    // None of this reaches the stick until 72-trackpoint.ts has tagged it as a
+    // pointing stick: the kernel rejects its variant 0x07, so psmouse calls it a
+    // plain mouse, and niri keys `trackpoint` on that classification.
+    trackpoint {
+        accel-profile "flat"
+        accel-speed 0.55
+    }
+    // Focus windows and outputs when the pointer moves into them. No
+    // max-scroll-amount: that qualifier suppresses following for any window the
+    // view would have to scroll to reach, which reads as "focus-follows-mouse
+    // does nothing" on a layout with columns off to the side.
+    focus-follows-mouse
+}

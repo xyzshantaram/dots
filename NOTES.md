@@ -32,3 +32,18 @@ Two things about the side effect:
 
 The ladder does not set the console keymap. This stays a manual fix unless a
 reinstall shows the same `en` default.
+
+## External brightness: DDC/CI dies in the dock
+
+The Acer EK220Q E3 on `DP-2` is reached through a USB-C dock that converts to
+HDMI. EDID gets through: `ddcutil detect` names the monitor, and the bus answers
+at `0x37`. But `getvcp 10` fails `DDCRC_RETRIES / DDCRC_DDC_DATA`, so the
+brightness keys change nothing on that output.
+
+Not permissions — `i2c_dev` is loaded, the account is in `video`, and the i2c
+nodes carry an ACL. The connector's hardware DDC bus (`i2c-6`) is empty, so
+traffic goes over AUX (`i2c-14`), which is why EDID works and DDC/CI does not.
+
+Left alone deliberately: no overlay dimming, no new dock. Adjust the monitor by
+hand. The DDC branch in `files/bin/brightness` stays for a machine where the
+monitor is plugged straight into HDMI or DisplayPort.

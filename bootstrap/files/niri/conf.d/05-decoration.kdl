@@ -1,0 +1,7 @@
+layout {
+    // The outline on the focused window. niri's default is a light blue
+    // (#7fc8ff).
+    focus-ring {
+        active-color "#7561c9"
+    }
+}

@@ -8,13 +8,18 @@ import "../services"
 Item {
     id: root
 
+    /** Only the output the pointer is on draws it; see Shell.qml. */
+    required property bool active
+
+    readonly property bool live: root.active && OsdService.shown
+
     anchors.centerIn: parent
     anchors.verticalCenterOffset: parent.height * 0.25
     width: 192
     height: 192
 
-    visible: OsdService.shown
-    opacity: OsdService.shown ? 1 : 0
+    visible: root.live
+    opacity: root.live ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: 110 } }
 
     Rectangle {

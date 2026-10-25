@@ -1,7 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Io
-import Quickshell.Services.Notifications
 import Quickshell.Wayland
 import "bar"
 import "core"
@@ -11,7 +9,11 @@ import "lock"
 import "notices"
 import "services"
 
-// The shell's only window, and the reason the floats work.
+// The shell's window, one per output, and the reason the floats work.
+//
+// shell.qml builds one of these for every entry in Quickshell.screens, passing
+// the screen in, so the bar, the dock, the catcher and the floats belong to a
+// monitor rather than to whichever one Quickshell calls primary.
 //
 // A layer-shell surface receives input only inside its own geometry. The old
 // bar was the strip plus 200px of headroom, so a click on the desktop never
@@ -33,6 +35,26 @@ import "services"
 // reach bar widgets with mapToItem: no cross-window mapping anywhere.
 PanelWindow {
     id: shell
+
+    /**
+     * The screen this window belongs to.
+     *
+     * Variants sets this on each instance (see shell.qml); the binding below is
+     * what puts the window on that output. Declared here because Variants
+     * assigns a property on the delegate object rather than exposing a scope.
+     */
+    property var modelData
+
+    screen: shell.modelData
+
+    /**
+     * The connector name of the output this window was built for.
+     *
+     * shell.qml instantiates one of these per screen and passes the screen in,
+     * and niri and Quickshell agree on connector names, so this is what the
+     * bar, the dock and the OSD filter on.
+     */
+    readonly property string outputName: shell.screen ? shell.screen.name : ""
 
     anchors {
         top: true
@@ -60,27 +82,6 @@ PanelWindow {
 
     /** True while any float is open: what the mask and the catcher switch on. */
     readonly property bool floating: bar.anyFloatOpen
-
-    // One server, and this is the only shell running now that the old tree is
-    // gone: it owns org.freedesktop.Notifications, which is why nothing else
-    // may be spawned to claim it. Quickshell outlives niri's spawn list here —
-    // the panel is passed this object rather than making a second one.
-    NotificationServer {
-        id: notifications
-
-        /**
-         * Track everything we are told about.
-         *
-         * A notification only appears in `trackedNotifications` — which is what
-         * both the banners and the panel's list read — once it is marked
-         * tracked, and Quickshell leaves that to the consumer so a server can
-         * also be a pass-through. This one is the only daemon on the bus, so
-         * everything that arrives here is meant to be drawn.
-         */
-        onNotification: (note) => {
-            note.tracked = true;
-        }
-    }
 
     /**
      * The strip, plus whatever is hanging under it.
@@ -115,6 +116,7 @@ PanelWindow {
 
     Bar {
         id: bar
+        outputName: shell.outputName
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
@@ -132,15 +134,19 @@ PanelWindow {
     // Notification banners, at the control centre's top edge and stacking down.
     Toasts {
         id: toasts
-        server: notifications
+        server: Notifications.server
+        // Only the output the pointer is on takes a new banner. Once taken it
+        // stays there, even if focus moves: see Toasts.qml.
+        active: shell.outputName === Niri.focusedOutputName
         // A menu and a banner compete for the same corner; the menu wins.
         suppressed: shell.floating
     }
 
-    // The dock is its own bottom-anchored surface, so it needs nothing from this
-    // window but whether a float is open.
+    // The dock is its own bottom-anchored surface on this output, so it needs
+    // nothing from this window but whether a float is open.
     Dock {
         id: dock
+        outputName: shell.outputName
         suppressed: shell.floating
     }
 
@@ -203,69 +209,13 @@ PanelWindow {
         id: centre
         anchorItem: bar.menuDownItem
         visible: bar.menuDownItem.menuOpen
-        server: notifications
+        server: Notifications.server
         // Its own window now, so it has to be told which screen it belongs to;
         // PanelWindow otherwise picks the primary.
         screen: shell.screen
     }
 
-    Lock { }
-
-    Osd { }
-
-    IpcHandler {
-        target: "osd"
-        function brightness(): void { OsdService.showBrightness(); }
-    }
-
-    IpcHandler {
-        target: "lock"
-        function open(): void { LockService.lock(); }
-    }
-
-    // niri answered its first output query: outputs are configured and the
-    // shell is drawing. Keyed to niri's pid, so a config reload does not chirp
-    // but a new session does.
-    Connections {
-        target: Niri
-        function onOutputsChanged() {
-            if (Niri.outputs.length === 0) return;
-            cuePlayer.running = true;
-        }
-    }
-
-    Process {
-        id: cuePlayer
-        command: ["sh", "-c",
-            "m=\"$XDG_RUNTIME_DIR/niri-ready-cue-$(pgrep -x niri | head -1)\"; [ -e \"$m\" ] && exit 0; touch \"$m\"; sleep 1.5; exec paplay \"$HOME/Downloads/niri-boot-chime.mp3\""]
-    }
-
-    // Both edges of one signal. `true` is emitted before the snapshot, so
-    // locking here covers the lid, the idle timer, UPower and a manual
-    // `systemctl hibernate` alike — every path goes through logind. `false` is
-    // the way back, and the shell is frozen with the system rather than
-    // restarted, so it is still holding the lock when the machine resumes.
-    Process {
-        id: resumeWatch
-        command: ["dbus-monitor", "--system",
-            "type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'"]
-        running: true
-        stdout: SplitParser {
-            onRead: line => {
-                if (line.includes("boolean true")) LockService.lock();
-                else if (line.includes("boolean false")) resumeDelay.restart();
-            }
-        }
-    }
-
-    Timer {
-        id: resumeDelay
-        interval: 1500
-        onTriggered: resumePlayer.running = true
-    }
-
-    Process {
-        id: resumePlayer
-        command: ["paplay", Quickshell.env("HOME") + "/Downloads/resume-success-sound.mp3"]
+    Osd {
+        active: shell.outputName === Niri.focusedOutputName
     }
 }

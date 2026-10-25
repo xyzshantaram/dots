@@ -16,6 +16,9 @@ import "../services"
 Item {
     id: bar
 
+    /** The output this strip is drawn on; the title and the dock filter on it. */
+    required property string outputName
+
     implicitHeight: Theme.barHeight
 
     property alias trayItem: tray
@@ -44,7 +47,7 @@ Item {
 
         // Left: when it is, what is focused, and what is playing.
         Clock {}
-        WindowTitle {}
+        WindowTitle { outputName: bar.outputName }
         NowPlaying {}
 
         // The middle is deliberately empty: the bar is a left cluster and a

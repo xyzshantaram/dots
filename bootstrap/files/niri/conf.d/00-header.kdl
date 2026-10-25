@@ -1,0 +1,16 @@
+// niri config for the Arch side.
+//
+// This is a deliberate subset of niri's stock config: the compositor's own
+// defaults are not read when a config exists, so the binds that make the
+// session usable are restated here, and the hardware keys the user asked for
+// are set explicitly.
+//
+// Mod is Super. keyd maps CapsLock to Meta, so either key works.
+//
+// config.kdl is generated from this directory. Edit these files, then rebuild:
+//
+//     bun run niri-split
+//
+// The splitter is vendored at bootstrap/tools/niri-split (MIT). It merges
+// `layout`, `input`, `binds` and `animations` into one block each and appends
+// everything else in filename order.

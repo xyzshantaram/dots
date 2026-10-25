@@ -3,7 +3,7 @@
  * script: 120-quickshell.ts
  * desc: Installs the shell tree — the bar, the floats, the notification banners and the services under them — so `qs` draws it on every output.
  * needs: 50-user.ts up, 40-packages.ts up (quickshell), 110-niri.ts up (which spawns `qs -p` at startup)
- * up: writes every file under files/shell into /home/ARCH_USER/.config/shell, and removes the old ~/.config/quickshell
+ * up: writes every file under files/shell into /home/ARCH_USER/.config/shell, removes the old ~/.config/quickshell, and restarts the running shell against the new tree when the target is this system
  * down: removes the directory
  * revisit: 2026-12-21
  * ---
@@ -28,11 +28,19 @@
  * could not close the control centre from an outside click. Leaving a second
  * config where a bare `qs` will find it is a trap, so this removes it instead of
  * tolerating it.
+ *
+ * `up` also restarts a running shell. Writing the files is not enough:
+ * Quickshell does watch this directory, but that reload is soft and reuses the
+ * windows already on screen, so a change to how many windows exist never shows
+ * up. Starting `qs` again replaces the instance and recreates them. Only on the
+ * live system: a chroot has no session to restart.
  */
+import { $ } from "bun";
+import process from "node:process";
 import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
 import {
-  ARCH_USER, existsInArch, fail, inArchSoft, main, needMount, ok, removeArch, say,
+  ARCH_USER, LIVE, existsInArch, fail, inArchSoft, main, needMount, ok, removeArch, say,
   writeArch, writeUserFile,
 } from "./lib.ts";
 
@@ -51,6 +59,54 @@ async function walk(dir: string, base = dir): Promise<string[]> {
     else out.push(relative(base, full));
   }
   return out;
+}
+
+/**
+ * Replaces the running shell with the tree just written.
+ *
+ * The session variables are read from the shell that is already running,
+ * because this step runs as root under sudo, which does not carry
+ * WAYLAND_DISPLAY or XDG_RUNTIME_DIR.
+ *
+ * Returns false when there was nothing to restart, the start failed, or the old
+ * process is still the only one — the caller then prints the manual command.
+ */
+async function restartShell(): Promise<boolean> {
+  if (!LIVE) return false;
+
+  const before = await $`pgrep -u ${ARCH_USER} -x qs`.nothrow().quiet();
+  const oldPids = before.stdout.toString().trim().split("\n").filter((p) => p !== "");
+  if (before.exitCode !== 0 || oldPids.length === 0) return false;
+
+  // /proc/<pid>/environ is NUL-separated, and Bun's shell does not do `<`
+  // redirection, so cat it and split on the separator.
+  const environ = await $`cat /proc/${oldPids[0]}/environ`.nothrow().quiet();
+  const keep = ["WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "XDG_CURRENT_DESKTOP"];
+  const env: string[] = [];
+  for (const line of environ.stdout.toString().split("\0")) {
+    const eq = line.indexOf("=");
+    if (eq > 0 && keep.includes(line.slice(0, eq))) env.push(line);
+  }
+
+  const started = await $`runuser -u ${ARCH_USER} -- env HOME=/home/${ARCH_USER} PATH=/usr/local/bin:/usr/bin ${env} qs -d -p ${DEST}`
+    .nothrow().quiet();
+  if (started.exitCode !== 0) {
+    say("could not restart the shell; it will pick this up at the next login");
+    process.stderr.write(started.stderr.toString());
+    return false;
+  }
+
+  // Detached, so give it a moment to fail if it is going to, and require a
+  // process that is not the old one: a failed start leaves the old shell up.
+  await $`sleep 1`.quiet();
+  const after = await $`pgrep -u ${ARCH_USER} -x qs`.nothrow().quiet();
+  const newPids = after.stdout.toString().trim().split("\n").filter((p) => p !== "");
+  if (!newPids.some((p) => !oldPids.includes(p))) {
+    say("the shell did not come back as a new instance");
+    return false;
+  }
+  say("restarted the shell against the new tree");
+  return true;
 }
 
 async function up(): Promise<void> {
@@ -72,7 +128,9 @@ async function up(): Promise<void> {
   }
 
   say("110-niri.ts spawns `qs -p` at startup, which reads this directory");
-  say(`to draw it now, without logging out: qs -p ${DEST}`);
+  if (!(await restartShell())) {
+    say(`to draw it now, without logging out: qs -p ${DEST}`);
+  }
 }
 
 async function down(): Promise<void> {
@@ -84,7 +142,7 @@ async function down(): Promise<void> {
 }
 
 async function verify(): Promise<void> {
-  for (const f of ["shell.qml", "Shell.qml", "lock/Lock.qml", "lock/LockSurface.qml", "lock/LockService.qml"]) {
+  for (const f of ["shell.qml", "Shell.qml", "services/Notifications.qml", "lock/Lock.qml", "lock/LockSurface.qml", "lock/LockService.qml"]) {
     const p = `/home/${ARCH_USER}/.config/shell/${f}`;
     (await existsInArch(p)) ? ok(`present: ${f}`) : fail(`missing: ${f}`);
   }

@@ -1,0 +1,21 @@
+
+// Outputs, by connector name. `niri msg outputs` lists the names; they are not
+// stable across docks, so this is the one place a new monitor is added.
+//
+// The Acer sits to the left and the laptop panel to its right, so the panel's
+// x is the Acer's logical width: 1920 / 1.05 = 1829. Setting it matters because
+// a scale change leaves the old position behind, and the gap between outputs
+// is a strip no window can reach.
+//
+// The Lenovo monitor at the other place is not here; add its connector the same
+// way once its name is known.
+
+output "DP-2" {
+    scale 1.05
+    position x=0 y=0
+}
+
+output "eDP-1" {
+    scale 1.10
+    position x=1829 y=0
+}

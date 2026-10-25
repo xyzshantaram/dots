@@ -24,6 +24,9 @@ PanelWindow {
     /** A float is open over the strip; the dock has no business being up. */
     required property bool suppressed
 
+    /** The output this dock is drawn on. Its windows are the ones in the plate. */
+    required property string outputName
+
     // ---- geometry --------------------------------------------------------
 
     readonly property int cellSize: 44
@@ -125,10 +128,16 @@ PanelWindow {
 
     // ---- when it shows ---------------------------------------------------
 
+    /**
+     * A window on this output fills it, so there is nothing for the dock to
+     * add. Any window on the output, not just the focused one: a fullscreen
+     * window keeps the other monitor's dock hidden when the pointer moves away.
+     */
     readonly property bool covered: {
-        const w = Niri.focusedWindow
-        const out = Niri.outputs.find((o) => o.name === Niri.focusedOutputName)
-        return !!w && !!out && w.layout.window_size[1] >= out.logical.height
+        const out = Niri.outputByName(dock.outputName)
+        if (!out) return false
+        return Niri.windowsOn(dock.outputName).some(
+            (w) => w.layout.window_size[1] >= out.logical.height)
     }
 
     // No windows, a fullscreen window, or a float over the strip: nothing to
@@ -200,8 +209,9 @@ PanelWindow {
 
     readonly property var groups: {
         const map = {}
-        for (let i = 0; i < Niri.windows.length; i++) {
-            const w = Niri.windows[i]
+        const owned = Niri.windowsOn(dock.outputName)
+        for (let i = 0; i < owned.length; i++) {
+            const w = owned[i]
             // A stray XWayland window has no app id; group it under its title so
             // it still gets a slot rather than vanishing.
             const key = w.app_id || w.title || "window"

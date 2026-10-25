@@ -1,0 +1,118 @@
+
+binds {
+    // Do not let a fullscreen app's idle inhibit stop swayidle's hibernate.
+    // (niri exposes ext-idle-notify-v1; swayidle is configured in 147-idle.ts.)
+
+    Mod+Shift+Slash { show-hotkey-overlay; }
+
+    // Programs
+    Mod+T hotkey-overlay-title="Terminal: wezterm" { spawn "wezterm"; }
+    Mod+D hotkey-overlay-title="Toggle floating" { toggle-window-floating; }
+    // Clipboard history is a vicinae deeplink. `vicinae <link>` is not a
+    // subcommand; `deeplink` is.
+    Mod+V hotkey-overlay-title="Clipboard history" { spawn "vicinae" "deeplink" "vicinae://launch/clipboard/history"; }
+    // Tapping CapsLock or Super emits evdev KEY_F13; see files/keyd/default.conf.
+    // niri cannot bind a bare modifier release, so the tap is resolved in keyd
+    // and arrives here as that key. This is the launcher.
+    //
+    // XF86Tools, not F13, and that is not a typo: this keymap maps <FK13> (evdev
+    // 183) to [ XF86Tools ], so a bind named F13 parses, validates and then never
+    // matches. Check with `xkbcli compile-keymap | grep 'key <FK13>'`.
+    XF86Tools hotkey-overlay-title="Launcher: vicinae (Super tap)" { spawn "vicinae" "toggle"; }
+    Super+Alt+L hotkey-overlay-title="Lock the screen" { spawn "gtklock"; }
+
+    // Hardware keys, as requested:
+    // volume in 5% steps, mic mute, brightness in 10% steps.
+    XF86AudioMute        allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- -l 1.0"; }
+    XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+ -l 1.0"; }
+    // mic-mute flips the PipeWire source mute AND the ALSA capture switch, which
+    // is what drives the ThinkPad mic LED (see 110-niri.ts and files/bin/mic-mute).
+    XF86AudioMicMute     allow-when-locked=true { spawn "mic-mute"; }
+    XF86MonBrightnessUp   allow-when-locked=true { spawn-sh "brightness up && qs -p /home/shan/.config/shell ipc call osd brightness"; }
+    XF86MonBrightnessDown allow-when-locked=true { spawn-sh "brightness down && qs -p /home/shan/.config/shell ipc call osd brightness"; }
+
+    // Copilot key: keyd turns leftmeta+leftshift+f23 into a plain Pause press.
+    // Dictation is installed by 170-dictation.ts.
+    Pause allow-when-locked=true { spawn "voxtype" "record" "toggle"; }
+
+    // Session
+    Mod+O repeat=false { toggle-overview; }
+    Mod+Q repeat=false { close-window; }
+    Alt+F4 repeat=false { close-window; }
+    Mod+Shift+E { quit; }
+    Ctrl+Alt+Delete { quit; }
+    Mod+Shift+P { power-off-monitors; }
+
+    // Focus
+    Mod+Left  { focus-column-left; }
+    Mod+Down  { focus-window-down; }
+    Mod+Up    { focus-window-up; }
+    Mod+Right { focus-column-right; }
+    Mod+H     { focus-column-left; }
+    Mod+J     { focus-window-down; }
+    Mod+K     { focus-window-up; }
+
+    // Lock. focus-column-right is on Mod+Right. `qs ipc` needs -p: without it
+    // it looks for the default config at ~/.config/quickshell, which does not
+    // exist, and the call never reaches this shell.
+    Mod+L { spawn "qs" "-p" "/home/shan/.config/shell" "ipc" "call" "lock" "open"; }
+
+    // Move
+    Mod+Ctrl+Left  { move-column-left; }
+    Mod+Ctrl+Down  { move-window-down; }
+    Mod+Ctrl+Up    { move-window-up; }
+    Mod+Ctrl+Right { move-column-right; }
+    Mod+Ctrl+H     { move-column-left; }
+    Mod+Ctrl+J     { move-window-down; }
+    Mod+Ctrl+K     { move-window-up; }
+    Mod+Ctrl+L     { move-column-right; }
+
+    // Workspaces
+    Mod+Page_Down { focus-workspace-down; }
+    Mod+Page_Up   { focus-workspace-up; }
+    Mod+U         { focus-workspace-down; }
+    Mod+I         { focus-workspace-up; }
+    Mod+Ctrl+Page_Down { move-column-to-workspace-down; }
+    Mod+Ctrl+Page_Up   { move-column-to-workspace-up; }
+    Mod+1 { focus-workspace 1; }
+    Mod+2 { focus-workspace 2; }
+    Mod+3 { focus-workspace 3; }
+    Mod+4 { focus-workspace 4; }
+    Mod+5 { focus-workspace 5; }
+    Mod+6 { focus-workspace 6; }
+    Mod+7 { focus-workspace 7; }
+    Mod+8 { focus-workspace 8; }
+    Mod+9 { focus-workspace 9; }
+    Mod+Ctrl+1 { move-column-to-workspace 1; }
+    Mod+Ctrl+2 { move-column-to-workspace 2; }
+    Mod+Ctrl+3 { move-column-to-workspace 3; }
+    Mod+Ctrl+4 { move-column-to-workspace 4; }
+    Mod+Ctrl+5 { move-column-to-workspace 5; }
+
+    // Layout
+    Mod+R       { switch-preset-column-width; }
+    Mod+Shift+R { switch-preset-column-width-back; }
+    Mod+F       { maximize-column; }
+    Mod+Shift+F { fullscreen-window; }
+    Mod+M       { maximize-window-to-edges; }
+    Mod+C       { center-column; }
+    Mod+Minus   { set-column-width "-10%"; }
+    Mod+Equal   { set-column-width "+10%"; }
+    Mod+W       { toggle-column-tabbed-display; }
+
+    // Touchpad gestures (from the niri-gestures build; see 105-niri-gestures.ts).
+    // Three fingers open and close the overview; four fingers move around niri.
+    // Add natural-scroll=true to the four-finger pair to flip the travel.
+    TouchpadSwipe fingers=3 direction="up"    { close-overview; }
+    TouchpadSwipe fingers=3 direction="down"  { open-overview; }
+    TouchpadSwipe fingers=4 direction="up"    { focus-workspace-up; }
+    TouchpadSwipe fingers=4 direction="down"  { focus-workspace-down; }
+    TouchpadSwipe fingers=4 direction="left"  { focus-column-left; }
+    TouchpadSwipe fingers=4 direction="right" { focus-column-right; }
+
+    // Screenshots
+    Print       { screenshot; }
+    Ctrl+Print  { screenshot-screen; }
+    Alt+Print   { screenshot-window; }
+}

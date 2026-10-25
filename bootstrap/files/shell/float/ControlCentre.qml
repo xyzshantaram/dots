@@ -15,9 +15,9 @@ import "../services"
 // a PanelWindow with exclusive keyboard, which is what this is now.
 //
 // The notification server is passed in rather than created here: it has to
-// outlive the panel, and there can only be one. It lives on Bar, outside the
-// per-screen Variants, so a second monitor does not try to claim the D-Bus name
-// a second time.
+// outlive the panel, and there can only be one. It is a singleton under
+// services/, so one server is shared by every screen's window and the D-Bus
+// name is claimed exactly once.
 PanelWindow {
     id: root
 

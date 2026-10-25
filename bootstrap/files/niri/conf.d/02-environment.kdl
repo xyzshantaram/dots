@@ -1,0 +1,8 @@
+
+// Qt applications take their colours from qt6ct, which 136-qt-theme.ts points
+// at the Breeze-libadwaita dark scheme. Without the platform theme the plugin is
+// never loaded and every Qt app falls back to a light Fusion palette, whatever
+// qt6ct is configured with.
+environment {
+    QT_QPA_PLATFORMTHEME "qt6ct"
+}

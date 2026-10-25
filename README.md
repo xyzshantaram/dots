@@ -33,17 +33,24 @@ Quickshell, under `bootstrap/files/shell/`. The ladder copies the directory to
 `~/.config/shell`, so a new file installs itself and no step names one.
 
 ```
-Shell.qml        the one full-screen layer surface: strip, floats, catcher
+shell.qml        one Shell per screen, plus the lock, IPC targets and cues
+Shell.qml        the full-screen layer surface: strip, floats, catcher
 bar/             the strip's widgets, each in its own file
 float/           control centre, mixer, tray menu, bluetooth menu
-components/      chips, entries, the notification card
+components/       chips, entries, the notification card
 core/            Theme, and the shared hover state
 dock/            the dock
 lock/            the lock screen
 notices/         notification banners
-services/        niri, wifi, bluetooth, pipewire, voxtype, OSD
+services/        niri, notifications, wifi, bluetooth, pipewire, voxtype, OSD
 ```
 
+- One window per output. `shell.qml` fans `Shell.qml` out over
+  `Quickshell.screens`, so every monitor gets its own strip, dock, floats and
+  click-catcher. The notification server is a singleton, because the D-Bus name
+  can be claimed once; the lock already covers every output by itself.
+- A banner is taken by the output under the pointer and stays there if focus
+  moves. It fades after ten seconds; the control centre keeps the row.
 - The window is full-screen and transparent, and `mask` is a union of
   rectangles. Opening the whole screen so a banner could be clicked kept the
   mask full-screen for a notification with no timeout, and the shell took every
@@ -81,7 +88,7 @@ services/        niri, wifi, bluetooth, pipewire, voxtype, OSD
 - The greeter needs its own polkit rule for power buttons — it has no logind session, so polkit's defaults never match.
 - udiskie starts from the niri session, not a user unit: polkit's stock rules need an *active* session.
 - Typing goes through `wtype`, not `eitype`. Inter-key delay is voxtype's `type_delay_ms`, not the wrapper.
-- Font is `FantasqueSansM Nerd Font Mono`. `Mono` keeps icons on the cell grid.
+- Monospace is `Lilex Nerd Font Mono` from `ttf-lilex-nerd` in extra, set as the default `monospace` through a fontconfig drop-in. The patched build carries the icons, so nothing sits behind it. Fantasque stays installed but unused.
 - Default sans-serif is `Inter`, with full hinting; Noto is the coverage fallback behind it.
 
 **Packages**

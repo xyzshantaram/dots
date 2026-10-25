@@ -1,12 +1,23 @@
 /**
  * ---
  * script: 80-fonts.ts
- * desc: Installs the vendored CMU Serif fonts, makes Inter the default sans-serif with Noto behind it, turns on full hinting, rebuilds the font cache, and checks the families niri and wezterm ask for.
+ * desc: Installs the vendored CMU Serif fonts, makes Inter the default sans-serif with Noto behind it, makes Lilex Nerd Font Mono the default monospace, turns on full hinting, rebuilds the font cache, and checks the families niri and wezterm ask for.
  * needs: 40-packages.ts up
- * up: copies files/fonts/cmu/*.otf into /usr/local/share/fonts/cmu, writes the emoji, Inter and hinting drop-ins, fc-cache -f, verifies families
+ * up: copies files/fonts/cmu/*.otf into /usr/local/share/fonts/cmu, writes the emoji, Inter, Lilex and hinting drop-ins, fc-cache -f, verifies families
  * down: removes the CMU directory and the fontconfig drop-ins, re-runs fc-cache
  * revisit: 2026-12-21
  * ---
+ *
+ * Two font choices, made once for the machine rather than in each application:
+ * Inter for sans-serif and Lilex Nerd Font Mono for monospace, both through
+ * fontconfig drop-ins. WezTerm and the shell still name Lilex explicitly, so
+ * they do not depend on the alias; everything else asks for `monospace` and
+ * gets it.
+ *
+ * Lilex comes from ttf-lilex-nerd in extra (40-packages), so it is already
+ * patched: the icon range is in the same family and nothing needs a second
+ * font behind it. Fantasque stays installed because it was asked for, not
+ * because anything resolves through it.
  *
  * CMU is vendored in files/fonts/cmu (OFL-1.1, from texlive-cm-unicode).
  * There is deliberately no fallback to another OS: this ladder builds a system
@@ -21,7 +32,7 @@ import {
   writeArch,
 } from "./lib.ts";
 
-const VENDORED = `${import.meta.dir}/files/fonts/cmu`;
+const VENDORED_CMU = `${import.meta.dir}/files/fonts/cmu`;
 const CMU_DEST = "/usr/local/share/fonts/cmu";
 
 /**
@@ -36,25 +47,23 @@ const CMU_DEST = "/usr/local/share/fonts/cmu";
  */
 const EMOJI_CONF = "/etc/fonts/conf.d/98-noto-emoji-fallback.conf";
 const INTER_CONF = "/etc/fonts/conf.d/99-inter-sans.conf";
+const LILEX_CONF = "/etc/fonts/conf.d/99-lilex-mono.conf";
 const HINTING_CONF = "/etc/fonts/conf.d/99-hinting-full.conf";
+/** The ZedMono rule the first run of this step left behind; removed on up. */
+const OLD_ZED_CONF = "/etc/fonts/conf.d/99-zed-mono.conf";
 
 /**
  * Families that must resolve, and why.
  *
- * The Fantasque family is `FantasqueSansM Nerd Font Mono`, and the odd spelling
- * is the real one: Nerd Fonts 3.x names these `FantasqueSansM Nerd Font`,
- * `... Mono` and `... Propo`. There is no `FantasqueSansMono Nerd Font`, which
- * is what this list and the configs used to ask for, so fontconfig quietly
- * substituted a default and the terminal never used the font at all. Confirmed
- * with `fc-query` against the files shipped by ttf-fantasque-nerd 3.5.1.
+ * Lilex Nerd Font Mono is the monospace default and the icon font both: the
+ * package in extra is the Nerd Font build, so the glyph range is in the same
+ * family. `Mono` keeps those glyphs on the single-cell grid, which is what
+ * keeps a terminal's columns aligned.
  *
- * `Mono` rather than the bare name: it forces every glyph, the icon range
- * included, onto the single-cell grid, which is what keeps a terminal's columns
- * aligned. The `Propo` variant spaces icons proportionally and is for text that
- * is not a grid.
+ * Inter is the sans default; Noto covers CJK and emoji.
  */
 const REQUIRED: [string, string][] = [
-  ["FantasqueSansM Nerd Font Mono", "wezterm, the fish prompt and quickshell"],
+  ["Lilex Nerd Font Mono", "the monospace default: wezterm, and everything that asks for monospace"],
   ["Inter", "the default sans-serif, and UI text for quickshell"],
   ["Noto Sans", "CJK and non-Latin fallback"],
   ["Noto Color Emoji", "emoji fallback"],
@@ -71,14 +80,14 @@ async function countFonts(dir: string): Promise<number> {
 }
 
 async function installCmu(): Promise<boolean> {
-  const count = await countFonts(VENDORED);
+  const count = await countFonts(VENDORED_CMU);
   if (count === 0) {
     say(`no .otf/.ttf in files/fonts/cmu`);
     return false;
   }
 
   await $`mkdir -p ${at(CMU_DEST)}`;
-  const copied = await $`cp -aL ${VENDORED}/. ${at(CMU_DEST)}/`.nothrow();
+  const copied = await $`cp -aL ${VENDORED_CMU}/. ${at(CMU_DEST)}/`.nothrow();
   if (copied.exitCode !== 0) {
     say("copying the CMU fonts failed");
     process.stderr.write(copied.stderr.toString());
@@ -155,6 +164,34 @@ async function up(): Promise<void> {
   );
   say(`installed ${HINTING_CONF}`);
 
+  await writeArch(
+    LILEX_CONF,
+    `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<!-- Lilex Nerd Font Mono is the default monospace. The generic name is what
+     terminals, editors and every application that asks for a fixed-width face
+     resolve through, so this is the one place the choice is made. The font
+     itself comes from ttf-lilex-nerd, installed system-wide by 40-packages.ts.
+
+     prepend_first, not prepend: fontconfig's plain prepend inserts after the
+     marker that 60-latin.conf leaves in the generic family list, which puts the
+     shipped mono list in front of this one and Noto Sans Mono wins. prepend_first
+     is the mode that actually goes to the front. Installed by bootstrap. -->
+<fontconfig>
+  <match target="pattern">
+    <test name="family" qual="any"><string>monospace</string></test>
+    <edit name="family" mode="prepend_first" binding="strong"><string>Lilex Nerd Font Mono</string></edit>
+  </match>
+</fontconfig>
+`,
+  );
+  say(`installed ${LILEX_CONF}`);
+
+  if (await existsInArch(OLD_ZED_CONF)) {
+    await removeArch(OLD_ZED_CONF);
+    say(`removed the stale ${OLD_ZED_CONF}`);
+  }
+
   await inArchFcCache();
   say("font cache rebuilt");
 
@@ -191,6 +228,17 @@ async function up(): Promise<void> {
     missing++;
   }
 
+  // And the default monospace has to be Lilex Nerd Font Mono. Same reasoning:
+  // this is what catches the alias surviving when the family stops resolving.
+  const mono = await inArchSoft("fc-match", "-f", "%{family}", "monospace");
+  const monoFamily = mono.stdout.toString().trim();
+  if (monoFamily.toLowerCase().includes("lilex")) {
+    say("  ok    monospace resolves to Lilex Nerd Font Mono");
+  } else {
+    say(`  MISS  monospace resolves to '${monoFamily}', not Lilex Nerd Font Mono`);
+    missing++;
+  }
+
   if (missing > 0) {
     say(`${missing} family/families unresolved; icons and UI text may fall back`);
     process.exit(1);
@@ -205,18 +253,20 @@ async function inArchFcCache(): Promise<void> {
 async function down(): Promise<void> {
   await needMount();
   await removeArch(CMU_DEST);
-  for (const conf of [EMOJI_CONF, INTER_CONF, HINTING_CONF]) await removeArch(conf);
+  for (const conf of [EMOJI_CONF, INTER_CONF, HINTING_CONF, LILEX_CONF, OLD_ZED_CONF]) await removeArch(conf);
   await inArchFcCache();
-  say("removed CMU fonts and the fontconfig drop-ins; cache rebuilt");
+  say("removed the CMU fonts and the fontconfig drop-ins; cache rebuilt");
 }
 
 async function verify(): Promise<void> {
-  for (const f of ["99-inter-sans.conf", "99-hinting-full.conf", "98-noto-emoji-fallback.conf"]) {
+  for (const f of ["99-inter-sans.conf", "99-hinting-full.conf", "98-noto-emoji-fallback.conf", "99-lilex-mono.conf"]) {
     const p = `/etc/fonts/conf.d/${f}`;
     (await existsInArch(p)) ? ok(`present: ${f}`) : fail(`missing: ${f}`);
   }
   const sans = (await inArchSoft("fc-match", "-f", "%{family}", "sans-serif")).stdout.toString();
   sans.startsWith("Inter") ? ok("default sans-serif is Inter") : fail(`default sans-serif is ${sans}`);
+  const mono = (await inArchSoft("fc-match", "-f", "%{family}", "monospace")).stdout.toString();
+  mono.toLowerCase().includes("lilex") ? ok("default monospace is Lilex") : fail(`default monospace is ${mono}`);
 }
 
 await main({ up, down, verify });

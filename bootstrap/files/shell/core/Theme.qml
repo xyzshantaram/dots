@@ -49,10 +49,10 @@ Singleton {
 
     // --- type -------------------------------------------------------------
     // Inter for words: it is the system sans-serif, and the bar has to match
-    // what applications render. The nerd font only for glyphs, since that is
-    // the only family installed that carries them.
+    // what applications render. Lilex Nerd Font Mono for glyphs: the package
+    // in extra is the patched build, so the icon range is in the same family.
     readonly property string fontFamily: "Inter"
-    readonly property string iconFont:   "FantasqueSansM Nerd Font Mono"
+    readonly property string iconFont:   "Lilex Nerd Font Mono"
     readonly property int fontSize:      13
     readonly property int fontSizeSmall: 11
     // The clock's size, and what sets the height of every pill on the bar: it

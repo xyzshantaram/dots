@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "ladder": "bun ./run.ts",
-    "verify": "bun ./run.ts verify"
+    "verify": "bun ./run.ts verify",
+    "niri-split": "PYTHONPATH=./bootstrap/tools/niri-split python3 -m nirisplit.cli --conf-dir ./bootstrap/files/niri/conf.d --output ./bootstrap/files/niri/config.kdl"
   }
 }

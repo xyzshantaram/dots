@@ -81,8 +81,15 @@ const HW = [
   "linux-firmware-amdgpu", "linux-firmware-other",
 ];
 
+/**
+ * Lilex is the monospace default and comes patched from extra: the Nerd Font
+ * build carries the icon glyphs, so the shell and the terminal do not need a
+ * second font behind it. Fantasque stays installed because it was asked for,
+ * not because anything resolves through it. Inter is the sans default; the
+ * Noto families cover CJK, extra scripts and emoji.
+ */
 const FONTS = [
-  "ttf-fantasque-nerd", "inter-font",
+  "ttf-lilex-nerd", "ttf-fantasque-nerd", "inter-font",
   "noto-fonts", "noto-fonts-cjk", "noto-fonts-emoji", "noto-fonts-extra",
 ];
 
