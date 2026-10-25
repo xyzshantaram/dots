@@ -28,7 +28,7 @@ live, without pretending the result is finished. Concretely:
 - A `tuigreet` login prompt, with fingerprint working at it for free
 - Hibernate-only power behaviour, ported from `../battery-sleep-configs`
 - Kernels kept on the ESP automatically, with a known-good fallback
-- A minimal fish config: prompt and fortune greeting, nothing else
+- A minimal fish config: prompt, fortune greeting and a PDF shrinker
 - The NPU dictation stack, ported from `../dictation-service`
 
 Everything is one toolchain: TypeScript run with Bun. The optional crossover
@@ -56,7 +56,7 @@ bun run ladder down 150-kernel-sync 12-esp-efi   # unwind a range backwards
 bun run ladder up --live                # install into this system, not a target
 
 bun run ladder software-dev up          # the optional developer-toolchain ladder
-bun run ladder creative up              # the optional creative-tools ladder
+bun run ladder personal up              # the optional personal-applications ladder
 
 bun run ladder dualboot-utils up        # the optional two-system ladder
 ```
@@ -112,7 +112,7 @@ Progress goes to stderr, so stdout stays pipeable.
 | `70-keyd` | CapsLock as Meta, Copilot key as `Pause` |
 | `72-trackpoint` | tags the TrackPoint as a pointing stick, so libinput and niri treat it as one |
 | `80-fonts` | vendored CMU Serif; Inter as the default sans-serif; full hinting |
-| `90-fish` | prompt, fortune greeting, git prompt colours |
+| `90-fish` | prompt, fortune greeting, git prompt colours, `shrinkpdf` |
 | `95-nanorc` | `/etc/nanorc`, the system-wide nano config |
 | `100-wezterm` | WezTerm config; background comes from `~/wallpapers` |
 | `105-niri-gestures` | rebuilds niri with the configurable touch-gesture patch set |
@@ -137,14 +137,16 @@ Two moved out, because they only exist when two systems share a disk:
 `run.ts --ladder dualboot-utils`. See that directory's README.
 
 The developer toolchain is a third ladder, [`software-dev/`](software-dev/README.md): cmake,
-unzip, autoconf, fnm carrying the Node LTS, pnpm, Command Code, rustup and Zed.
-None of it is needed for a session, so it is optional — but one main-ladder step
-does care about rustup: `105-niri-gestures` builds the patched niri with it, and
-installs it itself when the software-dev ladder has not run.
+unzip, autoconf, fnm carrying the Node LTS, pnpm, Command Code, rustup, Zed and
+agent-browser. None of it is needed for a session, so it is optional — but one
+main-ladder step does care about rustup: `105-niri-gestures` builds the patched
+niri with it, and installs it itself when the software-dev ladder has not run.
 
-A fourth, [`creative/`](creative/README.md), is ImageMagick, GIMP and Inkscape;
-Audacity and Kdenlive; OnlyOffice from the AUR; and Typst with its language
-service. Also optional, and removable on its own.
+A fourth, [`personal/`](personal/README.md), is ImageMagick, GIMP and Inkscape;
+Audacity, Kdenlive and qBittorrent; LibreOffice and OnlyOffice; Typst, fonttools
+and Ghostscript; Spotify, himalaya and Discord. Also optional, and removable on
+its own — except that the `shrinkpdf` function `90-fish` installs needs `gs`
+from its typesetting step.
 
 ### Checking it
 

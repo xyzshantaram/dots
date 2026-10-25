@@ -17,9 +17,14 @@ import { fail, inArch, inArchSoft, main, needMount, note, ok, say } from "./lib.
  * that opens ALSA rather than PipeWire — voxtype does — finds no capture device
  * at all and reports "The requested device is no longer available", which is
  * what broke dictation on the first boot.
+ *
+ * python is for niri-split, the vendored KDL preprocessor in
+ * bootstrap/tools/niri-split: `bun run niri-split` rebuilds the generated
+ * config.kdl from conf.d/. The ladder installs the committed file, so python
+ * is only needed to regenerate by hand.
  */
 const BASE = [
-  "base-devel", "git", "sudo", "fish", "bash", "btrfs-progs", "nano",
+  "base-devel", "git", "sudo", "fish", "bash", "btrfs-progs", "nano", "python",
   "networkmanager", "pipewire", "pipewire-pulse", "pipewire-alsa", "pipewire-jack",
   "wireplumber",
 ];
@@ -92,12 +97,12 @@ const IDLE = ["swayidle"];
 const STORAGE = ["udisks2", "udiskie"];
 
 /**
- * General applications. ffmpeg sits here rather than with the artistic ladder's
+ * General applications. ffmpeg sits here rather than with the personal ladder's
  * audio and video tools, because it is useful on its own whether or not any of
  * those are installed.
  *
  * flatpak is the package manager, not flatpak-apps: the applications it carries
- * are installed by the ladders that want them (see creative/60-spotify.ts), so
+ * are installed by the ladders that want them (see personal/60-spotify.ts), so
  * that removing this step does not silently remove somebody's music.
  *
  * gammastep is the night light — the Wayland successor to redshift, which is

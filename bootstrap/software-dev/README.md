@@ -20,6 +20,9 @@ system.
 - `10-toolchain` — cmake, unzip, autoconf; fnm with the latest Node LTS, pnpm
   from that npm, and Command Code from pnpm; rustup; Zed; uv for Python; and
   ripgrep, fd and just.
+- `15-agent-browser` — `agent-browser`, the browser automation CLI for AI
+  agents, from the AUR. A browser engine to drive is an optdepend, not installed
+  here.
 - `20-git` — the git presentation config: the `stat` and `https-to-ssh` aliases,
   delta as the pager with its colours, and the global ignore file; plus the
   `git-delta` and `bat` packages, and identity and SSH commit signing from
@@ -41,6 +44,7 @@ system.
 | Node LTS | `fnm install --lts` | `~/.local/share/fnm` |
 | `pnpm` | `npm install -g`, using the fnm node | `~/.local/share/fnm/aliases/default/bin` |
 | `command-code` | `pnpm add -g` | `~/.local/share/pnpm` |
+| `agent-browser` | the AUR, built by `aurInstall` | `/usr/bin/agent-browser` |
 | `rustup` | rustup.rs, `--no-modify-path` | `~/.cargo`, `~/.rustup` |
 | `git-delta`, `bat` | the repositories | `/usr` |
 | git aliases, delta pager | `files/git/config` + `.env` | `~/.config/git/config` |
