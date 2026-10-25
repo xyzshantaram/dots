@@ -1,0 +1,37 @@
+/* Qt widgets, installed by 136-qt-theme.ts.
+ *
+ * Two things the palette cannot reach:
+ *
+ * Headers. Qt paints a QHeaderView section with QPalette::Button, the same
+ * role as a push button, so lifting the palette until a header stands out
+ * lifts every button with it.
+ *
+ * The menu bar. Breeze paints QMenuBar from its own light scheme rather than
+ * the palette, so the bar stays #dee0e2 while the popup menus are already dark.
+ */
+QHeaderView {
+    background-color: #3f3f3f;
+}
+
+QHeaderView::section {
+    background-color: #3f3f3f;
+    color: #ffffff;
+    border: none;
+    border-right: 1px solid #1e1e1e;
+    padding: 0 4px;
+}
+
+QMenuBar {
+    background-color: #272727;
+    color: #ffffff;
+}
+
+QMenuBar::item {
+    background: transparent;
+    color: #ffffff;
+}
+
+QMenuBar::item:selected {
+    background-color: #3f3f3f;
+    color: #ffffff;
+}
