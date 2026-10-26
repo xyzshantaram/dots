@@ -12,6 +12,11 @@ spawn-at-startup "qs" "-n" "-p" "/home/shan/.config/shell"
 // latitude and longitude and this machine moves. See 158-night-light.ts.
 spawn-at-startup "/usr/local/bin/night-light"
 
+// Output arrangement. kanshi matches a monitor by make, model and serial, so
+// the Acer keeps the same side whichever connector the dock gives it. See
+// 111-kanshi.ts.
+spawn-at-startup "kanshi"
+
 // Session programs that belong to the session rather than to the machine.
 //
 // These three used to be added by their own steps — 112-wallpaper, 114-udisks,

@@ -22,9 +22,13 @@ import { fail, inArch, inArchSoft, main, needMount, note, ok, say } from "./lib.
  * bootstrap/tools/niri-split: `bun run niri-split` rebuilds the generated
  * config.kdl from conf.d/. The ladder installs the committed file, so python
  * is only needed to regenerate by hand.
+ *
+ * mandoc provides man, apropos and whatis, which is what reads the pages the
+ * notes here point at; a fresh install has no manual at all without it.
  */
 const BASE = [
-  "base-devel", "git", "sudo", "fish", "bash", "btrfs-progs", "nano", "python",
+  "base-devel", "git", "sudo", "fish", "bash", "btrfs-progs", "nano", "mandoc",
+  "python",
   "networkmanager", "pipewire", "pipewire-pulse", "pipewire-alsa", "pipewire-jack",
   "wireplumber",
 ];
@@ -55,9 +59,13 @@ const KERNEL = ["linux-zen", "amd-ucode", "efibootmgr"];
  * — enrolling a fingerprint, mounting a filesystem, pkexec — because polkitd has
  * nobody to ask. niri does not implement XDG autostart, so the agent's .desktop
  * never runs and 110-niri spawns the binary from the session instead.
+ *
+ * kanshi arranges outputs on hotplug. niri can do it only by connector name,
+ * and the Acer's connector changes with the path it takes, so 111-kanshi.ts
+ * matches the monitor by make, model and serial instead.
  */
 const DESKTOP = [
-  "niri", "wezterm", "quickshell", "gtklock", "polkit-gnome",
+  "niri", "kanshi", "wezterm", "quickshell", "gtklock", "polkit-gnome",
   "swaybg", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk",
   "nautilus", "papers", "gedit",
 ];

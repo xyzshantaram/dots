@@ -20,27 +20,14 @@
 // The splitter is vendored at bootstrap/tools/niri-split (MIT). It merges
 // `layout`, `input`, `binds` and `animations` into one block each and appends
 // everything else in filename order.
-
-// Outputs, by connector name. `niri msg outputs` lists the names; they are not
-// stable across docks, so this is the one place a new monitor is added.
+// Outputs are arranged by kanshi, not here. It matches a monitor by make,
+// model and serial, so the Acer stays to the left of the panel whichever
+// connector the dock assigns it. The profiles are in bootstrap/files/kanshi/
+// and are installed by 111-kanshi.ts.
 //
-// The Acer sits to the left and the laptop panel to its right, so the panel's
-// x is the Acer's logical width: 1920 / 1.05 = 1829. Setting it matters because
-// a scale change leaves the old position behind, and the gap between outputs
-// is a strip no window can reach.
-//
-// The Lenovo monitor at the other place is not here; add its connector the same
-// way once its name is known.
-
-output "DP-2" {
-    scale 1.05
-    position x=0 y=0
-}
-
-output "eDP-1" {
-    scale 1.10
-    position x=1829 y=0
-}
+// With no profile applied — kanshi not running yet, or no monitor pair it
+// knows — niri places outputs itself, so a broken kanshi costs the arrangement
+// and not the session.
 
 // Qt applications take their colours from qt6ct, which 136-qt-theme.ts points
 // at the Breeze-libadwaita dark scheme. Without the platform theme the plugin is
@@ -131,6 +118,11 @@ spawn-at-startup "qs" "-n" "-p" "/home/shan/.config/shell"
 // Night light. A helper rather than gammastep directly: gammastep takes a fixed
 // latitude and longitude and this machine moves. See 158-night-light.ts.
 spawn-at-startup "/usr/local/bin/night-light"
+
+// Output arrangement. kanshi matches a monitor by make, model and serial, so
+// the Acer keeps the same side whichever connector the dock gives it. See
+// 111-kanshi.ts.
+spawn-at-startup "kanshi"
 
 // Session programs that belong to the session rather than to the machine.
 //

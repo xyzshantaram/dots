@@ -1,0 +1,24 @@
+# Output profiles, applied on hotplug by kanshi. niri spawns it at session
+# start (see conf.d/07-autostart.kdl); 111-kanshi.ts installs this file.
+#
+# Outputs are named by make, model and serial, not by connector. The Acer's
+# connector changes with the path it takes — DP-1 direct, DP-2 through the
+# USB-C dock — and the arrangement should not. The laptop panel reports
+# "Unknown" as its serial, which cannot be left out.
+#
+# Positions are logical coordinates, and the scale is what sets them: the Acer
+# is 1920 physical pixels wide at 1.05, so its logical width is 1829 and the
+# panel starts there. Without an explicit position a scale change leaves the
+# old one behind, and the gap between outputs is a strip no window can reach.
+#
+# A profile applies only when the number of outputs it names equals the number
+# of connected outputs, so the two below cannot both match: the first is the
+# docked arrangement, the second the panel on its own.
+profile acer-left {
+    output "Acer Technologies EK220Q E3 341211C883W01" scale 1.05 position 0,0
+    output "Lenovo Group Limited NE140WUM-N6M Unknown" scale 1.10 position 1829,0
+}
+
+profile laptop {
+    output "Lenovo Group Limited NE140WUM-N6M Unknown" scale 1.10 position 0,0
+}

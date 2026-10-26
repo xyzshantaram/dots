@@ -35,10 +35,12 @@ reinstall shows the same `en` default.
 
 ## External brightness: DDC/CI dies in the dock
 
-The Acer EK220Q E3 on `DP-2` is reached through a USB-C dock that converts to
-HDMI. EDID gets through: `ddcutil detect` names the monitor, and the bus answers
-at `0x37`. But `getvcp 10` fails `DDCRC_RETRIES / DDCRC_DDC_DATA`, so the
-brightness keys change nothing on that output.
+The Acer EK220Q E3 is reached through a USB-C dock that converts to HDMI
+(`DP-2` through that dock, `DP-1` when plugged in directly; kanshi matches the
+monitor by identity, see `bootstrap/README.md`, Outputs). EDID gets through:
+`ddcutil detect` names the monitor, and the bus answers at `0x37`. But
+`getvcp 10` fails `DDCRC_RETRIES / DDCRC_DDC_DATA`, so the brightness keys
+change nothing on that output.
 
 Not permissions — `i2c_dev` is loaded, the account is in `video`, and the i2c
 nodes carry an ACL. The connector's hardware DDC bus (`i2c-6`) is empty, so

@@ -117,6 +117,7 @@ Progress goes to stderr, so stdout stays pipeable.
 | `100-wezterm` | WezTerm config; background comes from `~/wallpapers` |
 | `105-niri-gestures` | rebuilds niri with the configurable touch-gesture patch set |
 | `110-niri` | niri config, the `vicinae` launcher, and the mic-mute helper |
+| `111-kanshi` | output profiles: the Acer left of the laptop panel, matched by monitor identity |
 | `112-wallpaper` | `wallpaper-random` + swaybg, so each session picks a random wallpaper |
 | `114-udisks` | `udiskie` in the session, so USB drives and cards mount on insert |
 | `115-pam-fpr` | fingerprint at the console and for sudo; asterisks on sudo |
@@ -476,6 +477,33 @@ own, with `fc-match sans-serif` answering `Noto Color Emoji`.
 `80-fonts` fails the run if `sans-serif` does not resolve to `Inter`. Asking for
 the family by name, which the rest of its checks do, passes on the broken setup
 too.
+
+## Outputs
+
+`kanshi` owns the arrangement, not niri. niri can place an output only by
+connector name, and the Acer's is not stable: `DP-1` when it is plugged in
+directly, `DP-2` through the USB-C dock. `files/kanshi/config` names the
+monitors by make, model and serial instead, so the same profile applies
+whichever port the dock lands on.
+
+| profile | applies when | arrangement |
+| --- | --- | --- |
+| `acer-left` | Acer + laptop panel | Acer at `0,0` @ 1.05, panel at `1829,0` @ 1.10 |
+| `laptop` | panel alone | `0,0` @ 1.10 |
+
+The positions are the ones niri's `output` blocks used to carry. 1829 is the
+Acer's logical width, 1920 / 1.05, so the panel starts exactly where the Acer
+ends. kanshi matches a profile only when its output count equals the number of
+connected outputs, which is what keeps the two profiles from fighting on a
+docked machine.
+
+`110-niri` no longer writes `output` blocks; `conf.d/01-outputs.kdl` is a
+pointer. With no profile applied, niri auto-places outputs, so a kanshi that
+fails to start costs the arrangement and not the session.
+
+The daemon is spawned from the session (`conf.d/07-autostart.kdl`) because it
+is a Wayland client speaking `wlr-output-management`, which niri implements.
+`111-kanshi` installs the config; `40-packages` installs the package.
 
 ## Removable media
 
