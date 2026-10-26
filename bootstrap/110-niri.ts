@@ -1,7 +1,7 @@
 /**
  * ---
  * script: 110-niri.ts
- * desc: Installs the niri config and the session pieces it names: wezterm on Mod+T, vicinae on Mod+D, gtklock on Super+Alt+L, the six XF86 keys, swaync and qs at startup, and the Copilot key bound to voxtype. Installs vicinae itself (the launcher) and the mic-mute helper.
+ * desc: Installs the niri config and the session pieces it names: wezterm on Mod+T, vicinae on Mod+D, the Quickshell lock on Mod+L, the six XF86 keys, swaync and qs at startup, and the Copilot key bound to voxtype. Installs vicinae itself (the launcher) and the mic-mute helper.
  * needs: 105-niri-gestures.ts up, 50-user.ts up, 40-packages.ts up
  * up: writes /home/ARCH_USER/.config/niri/ (config.kdl and conf.d/) and validates it with niri validate; installs vicinae-bin from the AUR, enables its user unit, and installs /usr/local/bin/mic-mute
  * down: removes the config directory, the mic-mute helper, the launcher's unit link and the AUR package

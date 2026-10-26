@@ -65,7 +65,7 @@ const KERNEL = ["linux-zen", "amd-ucode", "efibootmgr"];
  * matches the monitor by make, model and serial instead.
  */
 const DESKTOP = [
-  "niri", "kanshi", "wezterm", "quickshell", "gtklock", "polkit-gnome",
+  "niri", "kanshi", "wezterm", "quickshell", "polkit-gnome",
   "swaybg", "xdg-desktop-portal-gnome", "xdg-desktop-portal-gtk",
   "nautilus", "papers", "gedit",
 ];

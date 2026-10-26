@@ -50,6 +50,15 @@ ShellRoot {
     IpcHandler {
         target: "lock"
         function open(): void { LockService.lock(); }
+
+        // Rehearse hibernation without hibernating: lock, show Sleeping for
+        // ten seconds, then wake up with the chime and a fresh PAM
+        // conversation. The screen stays locked afterwards, so there is no
+        // state to get stuck in.
+        function preview(): void {
+            LockService.prepareForSleep();
+            previewTimer.restart();
+        }
     }
 
     // niri answered its first output query: outputs are configured and the
@@ -71,9 +80,11 @@ ShellRoot {
 
     // Both edges of one signal. `true` is emitted before the snapshot, so
     // locking here covers the lid, the idle timer, UPower and a manual
-    // `systemctl hibernate` alike — every path goes through logind. `false` is
-    // the way back, and the shell is frozen with the system rather than
-    // restarted, so it is still holding the lock when the machine resumes.
+    // `systemctl hibernate` alike — every path goes through logind. PAM is
+    // dropped with the lock: the conversation cannot survive hibernation, and
+    // what comes back is a fingerprint verification that timed out while the
+    // machine was asleep. `false` is the way back: once the system has settled,
+    // wakeUp() starts a fresh PAM conversation and the chime plays.
     Process {
         id: resumeWatch
         command: ["dbus-monitor", "--system",
@@ -81,16 +92,28 @@ ShellRoot {
         running: true
         stdout: SplitParser {
             onRead: line => {
-                if (line.includes("boolean true")) LockService.lock();
+                if (line.includes("boolean true")) LockService.prepareForSleep();
                 else if (line.includes("boolean false")) resumeDelay.restart();
             }
         }
     }
 
     Timer {
+        id: previewTimer
+        interval: 10000
+        onTriggered: {
+            LockService.wakeUp();
+            resumePlayer.running = true;
+        }
+    }
+
+    Timer {
         id: resumeDelay
         interval: 1500
-        onTriggered: resumePlayer.running = true
+        onTriggered: {
+            LockService.wakeUp();
+            resumePlayer.running = true;
+        }
     }
 
     Process {

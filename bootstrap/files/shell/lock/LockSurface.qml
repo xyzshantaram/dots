@@ -154,6 +154,7 @@ WlSessionLockSurface {
                     id: pwBox
                     width: parent.width
                     height: 40
+                    visible: !LockService.sleeping
                     radius: Theme.radiusSmall
                     color: Qt.rgba(0, 0, 0, 0.45)
                     opacity: LockService.pamChecking ? 0.45 : 1.0
@@ -178,7 +179,7 @@ WlSessionLockSurface {
                         passwordCharacter: "●"
                         selectByMouse: false
                         clip: true
-                        readOnly: LockService.pamChecking
+                        readOnly: LockService.pamChecking || LockService.sleeping
                         Component.onCompleted: forceActiveFocus()
 
                         Keys.onPressed: event => {
@@ -199,6 +200,18 @@ WlSessionLockSurface {
                 }
 
                 Text {
+                    visible: LockService.sleeping
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "Sleeping..."
+                    color: Theme.text
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 48
+                    font.weight: Font.Light
+                }
+
+                Text {
+                    visible: !LockService.sleeping
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: LockService.pamError !== ""
                         ? LockService.pamError
@@ -214,6 +227,7 @@ WlSessionLockSurface {
 
     // Two actions, 200 above the bottom edge, each asking twice.
     Row {
+        visible: !LockService.sleeping
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 200
@@ -245,6 +259,14 @@ WlSessionLockSurface {
         function onPamErrorChanged() {
             if (LockService.pamError !== "") {
                 passField.text = "";
+                Qt.callLater(() => passField.forceActiveFocus());
+            }
+        }
+
+        function onSleepingChanged() {
+            if (LockService.sleeping) {
+                passField.text = "";
+            } else {
                 Qt.callLater(() => passField.forceActiveFocus());
             }
         }

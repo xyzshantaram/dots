@@ -21,7 +21,7 @@ Get to a system that boots, shows a terminal, and lets the UI be developed
 live, without pretending the result is finished. Concretely:
 
 - `niri` + `wezterm` + `quickshell` (`qs`), so a shell can be iterated on
-- `vicinae` as the launcher, `swaync` for notifications, `gtklock` to lock
+- `vicinae` as the launcher, `swaync` for notifications, Quickshell's lock screen
 - Tapping CapsLock (your Super) opens the launcher
 - NetworkManager and `nmcli`, `paru`, `firefox`, `podman`
 - Fingerprint login and sudo, keyd for the Super key
@@ -598,6 +598,36 @@ Two things worth knowing:
   compression because 42 GiB of RAM has to fit in 48 GiB of swap.
 - Arch's initramfs is busybox-based, so `145-hibernate` adds the `resume` hook
   after `udev` and rebuilds. Without it the image is written and never resumed.
+
+## Lock screen
+
+The lock is Quickshell's `WlSessionLock` (`lock/`), one instance covering every
+output. `Mod+L` opens it, and hibernation drives it through logind.
+
+Hibernation is a second state. On `PrepareForSleep true` the surface replaces the
+password card with a 48 px `Sleeping...` and hides the Shut Down / Sleep buttons,
+and the PAM conversation is dropped. It cannot survive the snapshot: what comes
+back is an fprintd verification that timed out while the machine was asleep,
+which is why fingerprint unlock did nothing on resume.
+
+On `PrepareForSleep false` the lock waits 1.5 s — the delay the resume chime
+already used, and enough for PipeWire and fprintd to be back — then clears
+`Sleeping...`, plays the chime, and starts a fresh PAM conversation. The fresh
+conversation is what makes `pam_fprintd` run `VerifyStart` again rather than
+resume a dead one. A failed result while sleeping is the cancellation, not a
+wrong password, so it draws no error.
+
+`/etc/pam.d/qslock` is `auth include login`; `115-pam-fpr` puts the fprintd line
+in `system-local-login`, so the lock inherits it.
+
+Rehearse the whole edge without hibernating:
+
+```
+qs -p ~/.config/shell ipc call lock preview
+```
+
+That locks, holds `Sleeping...` for ten seconds, then wakes with the chime and a
+fresh prompt. It stays locked afterwards, so there is no state to get stuck in.
 
 ## Kernels
 

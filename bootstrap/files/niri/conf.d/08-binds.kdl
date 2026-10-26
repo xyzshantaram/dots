@@ -19,7 +19,6 @@ binds {
     // 183) to [ XF86Tools ], so a bind named F13 parses, validates and then never
     // matches. Check with `xkbcli compile-keymap | grep 'key <FK13>'`.
     XF86Tools hotkey-overlay-title="Launcher: vicinae (Super tap)" { spawn "vicinae" "toggle"; }
-    Super+Alt+L hotkey-overlay-title="Lock the screen" { spawn "gtklock"; }
 
     // Hardware keys, as requested:
     // volume in 5% steps, mic mute, brightness in 10% steps.
@@ -56,7 +55,7 @@ binds {
     // Lock. focus-column-right is on Mod+Right. `qs ipc` needs -p: without it
     // it looks for the default config at ~/.config/quickshell, which does not
     // exist, and the call never reaches this shell.
-    Mod+L { spawn "qs" "-p" "/home/shan/.config/shell" "ipc" "call" "lock" "open"; }
+    Mod+L hotkey-overlay-title="Lock the screen" { spawn "qs" "-p" "/home/shan/.config/shell" "ipc" "call" "lock" "open"; }
 
     // Move
     Mod+Ctrl+Left  { move-column-left; }
